@@ -26,6 +26,10 @@ void kernel_main(void) {
     vga_print_string("Initializing IDT... ");
     idt_install();
     vga_print_string("[OK]\n");
+
+    paging_install();
+    vga_print_string("Initializing PMM... ");
+    pmm_init(128 * 1024 * 1024);
     
     vga_print_string("Setting up interrupts... ");
     asm volatile("sti");
