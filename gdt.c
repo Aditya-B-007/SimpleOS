@@ -1,4 +1,5 @@
 #include "gdt.h"
+#include <stdint.h>
 
 #define GDT_ENTRIES 5
 
@@ -20,8 +21,8 @@ void gdt_install(void) {
     gdt_set_gate(0, 0, 0, 0, 0);                    // Null segment
     gdt_set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);    // Kernel code segment (Ring 0)
     gdt_set_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF);    // Kernel data segment (Ring 0)
-    gdt_set_gate(3, 0, 0x7FFFFFFF, 0xFA, 0xCF);    // User code segment (Ring 3, limited)
-    gdt_set_gate(4, 0, 0x7FFFFFFF, 0xF2, 0xCF);    // User data segment (Ring 3, limited)
+    gdt_set_gate(3, 0, 0xFFFFFFFF, 0xFA, 0xCF);    // User code segment (Ring 3, limited)
+    gdt_set_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);    // User data segment (Ring 3, limited)
 
     gdt_flush();
 }
