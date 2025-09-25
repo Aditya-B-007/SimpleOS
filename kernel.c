@@ -28,7 +28,7 @@ void kernel_main(void) {
     paging_install();
 
     vga_print_string("Initializing PMM... ");
-    pmm_init(128 * 1024 * 1024);
+    pmm_init(128 * 1024 * 1024, (void*)0x200000);
     vga_print_string("[OK]\n");
     
     vga_print_string("Setting up interrupts... ");
