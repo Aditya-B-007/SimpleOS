@@ -1,126 +1,159 @@
 #include "pmm.h"
-#include <stdint.h>
+#include "vga.h"
+#include "paging.h"
+#define MAX_ORDER 10 // Max block size will be 4KB * 2^10 = 4MB
+#define PAGE_SIZE 4096
+typedef struct buddy_node {
+    struct buddy_node *next;
+} buddy_node_t;
 
-static uint32_t memory_top;
-static uint32_t memory_limit;
-static uint32_t allocation_count = 0;
-#define KERNEL_START_ADDRESS 0x200000
-#define MAX_ALLOCATIONS 1024
-#define MIN_ALLOCATION_SIZE 16
-#define MAX_ALLOCATION_SIZE (1024 * 1024)
+// An array of linked lists, one for each order.
+static buddy_node_t* free_lists[MAX_ORDER + 1];
+static uint8_t* memory_bitmap;
+static uint32_t total_pages;
 
-typedef struct {
-    uint32_t address;
-    uint32_t size;
-    int used;
-} allocation_entry_t;
+// Helper to get the buddy of a given block index.
+static inline uint32_t get_buddy_index(uint32_t index, uint32_t order) {
+    return index ^ (1 << order);
+}
 
-static allocation_entry_t allocations[MAX_ALLOCATIONS];
+void pmm_init(uint32_t memory_size, void* bitmap_addr) {
+    total_pages = memory_size / PAGE_SIZE;
+    memory_bitmap = (uint8_t*)bitmap_addr;
 
-void pmm_init(uint32_t total_memory) {
-    // Validate minimum memory requirement
-    if (total_memory < KERNEL_START_ADDRESS + (2 * 1024 * 1024)) {
-        // Insufficient memory - system cannot function
-        return;
+    // Initialize all free lists to be empty.
+    for (int i = 0; i <= MAX_ORDER; i++) {
+        free_lists[i] = NULL;
     }
 
-    // Ensure memory alignment to 4KB boundaries
-    memory_top = (KERNEL_START_ADDRESS + 4095) & ~4095;
-    memory_limit = total_memory & ~4095;
-    allocation_count = 0;
+    // Reserve paging structures from management
+    uint32_t paging_start = paging_get_reserved_start();
+    uint32_t paging_end = paging_get_reserved_end();
+    uint32_t paging_start_page = paging_start / PAGE_SIZE;
+    uint32_t paging_end_page = (paging_end + PAGE_SIZE - 1) / PAGE_SIZE;
 
-    // Initialize allocation table
-    for (int i = 0; i < MAX_ALLOCATIONS; i++) {
-        allocations[i].address = 0;
-        allocations[i].size = 0;
-        allocations[i].used = 0;
+    vga_print_string("Reserving paging structures: 0x");
+    vga_print_hex(paging_start);
+    vga_print_string(" - 0x");
+    vga_print_hex(paging_end);
+    vga_print_string("\n");
+
+    // Add all available memory into the allocator, skipping reserved regions
+    uint32_t start_page = 0x100000 / PAGE_SIZE;
+    for (uint32_t page = start_page; page < total_pages; ) {
+        // Skip paging structures
+        if (page >= paging_start_page && page < paging_end_page) {
+            page = paging_end_page;
+            continue;
+        }
+        // Find the largest order block we can create at this address.
+        uint32_t order = MAX_ORDER;
+        while (order > 0) {
+            if ((page % (1 << order) == 0) && (page + (1 << order) <= total_pages)) {
+                break;
+            }
+            order--;
+        }
+        
+        // Add the block to the appropriate free list.
+        buddy_node_t* block = (buddy_node_t*)(page * PAGE_SIZE);
+        block->next = free_lists[order];
+        free_lists[order] = block;
+        page += (1 << order);
     }
 }
 
-void* pmm_alloc(size_t size) {
-    // Validate input parameters
-    if (size == 0 || size < MIN_ALLOCATION_SIZE || size > MAX_ALLOCATION_SIZE) {
+void* pmm_alloc_blocks(uint32_t order) {
+    if (order > MAX_ORDER) {
         return NULL;
     }
 
-    // Align size to 16-byte boundary for better performance
-    size = (size + 15) & ~15;
+    // Find a free block, splitting larger ones if necessary.
+    uint32_t current_order = order;
+    while (current_order <= MAX_ORDER) {
+        if (free_lists[current_order] != NULL) {
+            // Found a block, break it down if it's larger than requested.
+            buddy_node_t* block = free_lists[current_order];
+            free_lists[current_order] = block->next;
 
-    // Check if we have space in allocation table
-    if (allocation_count >= MAX_ALLOCATIONS) {
-        return NULL;
-    }
-
-    // Ensure we don't overflow memory limits with safety margin
-    if (memory_top >= memory_limit ||
-        (memory_limit - memory_top) < size ||
-        (memory_limit - memory_top) < (4 * 1024)) { // Keep 4KB safety margin
-        return NULL;
-    }
-
-    // Validate memory_top alignment
-    if (memory_top & 15) {
-        memory_top = (memory_top + 15) & ~15;
-    }
-
-    // Find free allocation slot
-    for (int i = 0; i < MAX_ALLOCATIONS; i++) {
-        if (!allocations[i].used) {
-            allocations[i].address = memory_top;
-            allocations[i].size = size;
-            allocations[i].used = 1;
-            allocation_count++;
-
-            void* ptr = (void*)memory_top;
-            memory_top += size;
-
-            // Clear allocated memory for security
-            uint8_t* clear_ptr = (uint8_t*)ptr;
-            for (size_t j = 0; j < size; j++) {
-                clear_ptr[j] = 0;
+            while (current_order > order) {
+                current_order--;
+                uint32_t buddy_addr = (uint32_t)block + (PAGE_SIZE * (1 << current_order));
+                buddy_node_t* buddy = (buddy_node_t*)buddy_addr;
+                
+                // Add the buddy to its free list.
+                buddy->next = free_lists[current_order];
+                free_lists[current_order] = buddy;
             }
+            return block;
+        }
+        current_order++;
+    }
 
-            return ptr;
+    return NULL; // No suitable block found
+}
+
+void pmm_free_blocks(void* addr, uint32_t order) {
+    uint32_t page_index = (uint32_t)addr / PAGE_SIZE;
+
+    // Merge the block with its buddy if the buddy is also free.
+    while (order < MAX_ORDER) {
+        uint32_t buddy_index = get_buddy_index(page_index, order);
+        buddy_node_t* buddy = (buddy_node_t*)(buddy_index * PAGE_SIZE);
+        
+        // Search the free list for the buddy.
+        buddy_node_t** list = &free_lists[order];
+        int found_buddy = 0;
+        while (*list) {
+            if (*list == buddy) {
+                *list = (*list)->next; // Remove buddy from the list
+                found_buddy = 1;
+                break;
+            }
+            list = &(*list)->next;
+        }
+
+        if (found_buddy) {
+            // Merge and continue to the next order.
+            page_index = (page_index < buddy_index) ? page_index : buddy_index;
+            order++;
+        } else {
+            // Buddy is not free, stop merging.
+            break;
         }
     }
 
-    return NULL;
+    // Add the final (potentially merged) block to the free list.
+    buddy_node_t* block = (buddy_node_t*)(page_index * PAGE_SIZE);
+    block->next = free_lists[order];
+    free_lists[order] = block;
 }
 
-void pmm_free(void* ptr) {
-    if (ptr == NULL) {
-        return;
-    }
-
-    uint32_t addr = (uint32_t)ptr;
-
-    // Validate address is within our memory range
-    if (addr < KERNEL_START_ADDRESS || addr >= memory_limit) {
-        return; // Invalid address
-    }
-
-    // Find and free the allocation
-    for (int i = 0; i < MAX_ALLOCATIONS; i++) {
-        if (allocations[i].used && allocations[i].address == addr) {
-            // Clear memory before freeing for security
-            uint8_t* clear_ptr = (uint8_t*)ptr;
-            for (size_t j = 0; j < allocations[i].size; j++) {
-                clear_ptr[j] = 0;
-            }
-
-            // Mark as free
-            allocations[i].address = 0;
-            allocations[i].size = 0;
-            allocations[i].used = 0;
-            allocation_count--;
-            return;
-        }
-    }
+// Convenience wrappers for single-page allocations.
+void* pmm_alloc_page(void) {
+    return pmm_alloc_blocks(0);
 }
 
+void pmm_free_page(void* addr) {
+    pmm_free_blocks(addr, 0);
+}
+
+// Calculate total free memory available
 uint32_t pmm_get_free_memory(void) {
-    if (memory_limit > memory_top) {
-        return memory_limit - memory_top;
+    uint32_t total_free = 0;
+
+    for (int order = 0; order <= MAX_ORDER; order++) {
+        uint32_t block_size = PAGE_SIZE * (1 << order);
+        uint32_t block_count = 0;
+
+        buddy_node_t* current = free_lists[order];
+        while (current != NULL) {
+            block_count++;
+            current = current->next;
+        }
+
+        total_free += block_count * block_size;
     }
-    return 0;
+
+    return total_free;
 }
