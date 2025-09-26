@@ -55,20 +55,40 @@ void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
     idt[num].flags = flags;
 }
 void isr_handler(registers_t *r) {
+    // Validate register structure pointer
+    if (r == NULL) {
+        vga_print_string("Critical error: NULL register pointer in ISR!\n");
+        asm volatile("cli");
+        for(;;) { asm volatile("hlt"); }
+    }
+
     vga_print_string("Received interrupt: ");
+    vga_print_dec(r->int_no);
+    vga_print_string(" - ");
+
     if (r->int_no < 32) {
+        // Handle CPU exceptions
         if (r->int_no < sizeof(exception_messages) / sizeof(exception_messages[0])) {
             vga_print_string(exception_messages[r->int_no]);
         } else {
             vga_print_string("Unknown Exception");
         }
-        vga_print_string("\nEIP: ");
+        vga_print_string("\nEIP: 0x");
         vga_print_hex(r->eip);
-        vga_print_string(" CS: ");
+        vga_print_string(" CS: 0x");
         vga_print_hex(r->cs);
-        vga_print_string(" EFLAGS: ");
+        vga_print_string(" EFLAGS: 0x");
         vga_print_hex(r->eflags);
-        vga_print_string("\nSystem halted!\n");
+        vga_print_string(" ESP: 0x");
+        vga_print_hex(r->esp);
+
+        // Additional debug information for certain exceptions
+        if (r->int_no == 13) { // General Protection Fault
+            vga_print_string("\nError code: 0x");
+            vga_print_hex(r->err_code);
+        }
+
+        vga_print_string("\nSystem halted due to exception!\n");
         asm volatile("cli");
         for(;;) {
             asm volatile("hlt");
@@ -91,21 +111,33 @@ void irq_uninstall_handler(int irq) {
 }
 
 void irq_handler(registers_t *r) {
+    // Validate register structure pointer
+    if (r == NULL) {
+        return;
+    }
+
+    // Validate interrupt number range for IRQs
     if (r->int_no < 32 || r->int_no > 47) {
         return;
     }
-    
+
     int irq = r->int_no - 32;
+
+    // Double-check IRQ bounds
     if (irq >= 0 && irq < 16) {
         void (*handler)(registers_t *r) = irq_routines[irq];
-        if (handler) {
+        if (handler != NULL) {
+            // Call the registered handler
             handler(r);
         }
     }
-    
+
+    // Send End of Interrupt signal to PICs
     if (r->int_no >= 40) {
+        // Send reset signal to slave PIC
         outb(0xA0, 0x20);
     }
+    // Send reset signal to master PIC
     outb(0x20, 0x20);
 }
 
@@ -131,7 +163,7 @@ void idt_install(void) {
     idt_set_gate(11, (uint32_t)isr11, 0x08, 0x8E);
     idt_set_gate(12, (uint32_t)isr12, 0x08, 0x8E);
     idt_set_gate(13, (uint32_t)isr13, 0x08, 0x8E);
-    idt_set_gate(14, (uint32_t)isr14, 0x08, 0x8E);
+    idt_set_gate(14, (uint32_t)page_fault_handler, 0x08, 0x8E);
     idt_set_gate(15, (uint32_t)isr15, 0x08, 0x8E);
     idt_set_gate(16, (uint32_t)isr16, 0x08, 0x8E);
     idt_set_gate(17, (uint32_t)isr17, 0x08, 0x8E);
@@ -189,4 +221,49 @@ uint32_t inl(uint16_t port) {
 
 void outl(uint16_t port, uint32_t val) {
     asm volatile("outl %0, %1" : : "a"(val), "Nd"(port));
+}
+void page_fault_handler(registers_t *r) {
+    // Function is called when there is a page fault
+    // The faulting address is stored in the CR2 register
+    uint32_t faulting_address;
+    asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
+
+    // The error code gives us the details about the fault
+    int present = !(r->err_code & 0x1);   // Page is not present
+    int rw = r->err_code & 0x2;           // Write operation?
+    int us = r->err_code & 0x4;           // Were we in user-mode?
+    int reserved = r->err_code & 0x8;     // Overwritten reserved bits?
+    int id = (r->err_code & 0x10) >> 4;   // Instruction fetch (if NX enabled)
+    int pk = (r->err_code & 0x20) >> 5;   // Protection key violation (if PKU enabled)
+    int ss = (r->err_code & 0x40) >> 6;   // Shadow stack violation (Intel CET)
+    int sgx = (r->err_code & 0x80) >> 7;  // SGX access violation (if SGX enabled)
+
+    // Display detailed page fault information
+    vga_print_string("\n\nPAGE FAULT!\n");
+    vga_print_string("Faulting address: 0x");
+    vga_print_hex(faulting_address);
+    vga_print_string("\nError code: 0x");
+    vga_print_hex(r->err_code);
+    vga_print_string("\nEIP: 0x");
+    vga_print_hex(r->eip);
+
+    vga_print_string("\nFault type: ");
+    if (!present) vga_print_string("Page not present ");
+    if (rw) vga_print_string("Write operation ");
+    if (us) vga_print_string("User mode ");
+    if (reserved) vga_print_string("Reserved bits overwritten ");
+    if (id) vga_print_string("Instruction fetch ");
+    if (pk) vga_print_string("Protection key violation ");
+    if (ss) vga_print_string("Shadow stack violation ");
+    if (sgx) vga_print_string("SGX access violation ");
+
+    vga_print_string("\nSystem halted due to page fault!\n");
+
+    // Prevent unused variable warnings
+    (void)id; (void)pk; (void)ss; (void)sgx;
+
+    asm volatile("cli");
+    for(;;) {
+        asm volatile("hlt");
+    }
 }
