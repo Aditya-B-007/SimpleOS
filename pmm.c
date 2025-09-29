@@ -13,7 +13,8 @@ static buddy_node_t* free_lists[MAX_ORDER + 1];
 static inline uint32_t page_index_from_addr(void* addr) { return (uint32_t)addr / PAGE_SIZE; }
 static inline void* addr_from_page_index(uint32_t index) { return (void*)(index * PAGE_SIZE); }
 static inline uint32_t get_buddy_index(uint32_t index, uint32_t order) { return index ^ (1 << order); }
-
+static page_frame_t* page_frame_database;
+static uint32_t total_pages;
 void pmm_init(uint32_t memory_end) {
     uint32_t total_pages = memory_end / PAGE_SIZE;
 
@@ -104,4 +105,20 @@ void pmm_free_page(void* p) {
     buddy_node_t* final_block = (buddy_node_t*)addr_from_page_index(page_index);
     final_block->next = free_lists[current_order];
     free_lists[current_order] = final_block;
+}
+
+uint32_t pmm_get_free_memory(void) {
+    uint32_t total_free = 0;
+
+    for (int order = 0; order <= MAX_ORDER; order++) {
+        uint32_t block_size = PAGE_SIZE * (1 << order);
+        buddy_node_t* current = free_lists[order];
+
+        while (current != NULL) {
+            total_free += block_size;
+            current = current->next;
+        }
+    }
+
+    return total_free;
 }

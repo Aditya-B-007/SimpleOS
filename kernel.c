@@ -9,7 +9,14 @@
 //#include "pci.h"
 #include "NIC.h"
 #include "pmm.h"
-
+#include "task.h"
+#include "syscall.h"
+void counter_task(){
+    int i=0;
+    while(1){
+        vga_putentryat('A' + (i++%26),0x0F,79,0);
+    }
+}
 void kernel_main(void) {
     vga_init();
     vga_setcolor(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
@@ -18,12 +25,16 @@ void kernel_main(void) {
     vga_print_string("===============================\n\n");
     gdt_install();
     idt_install();
+    syscalls_install();
     paging_install();
     pmm_init(128 * 1024 * 1024);
     asm volatile("sti");
     keyboard_install();
     timer_install();
     rtl8139_init();
+    tasking_install();
+    create_task("shell",shell_init);
+    create_task("counter",counter_task);
     uint32_t free_mem = pmm_get_free_memory();
     vga_print_dec(free_mem / 1024);
     vga_print_string(" KB\n");

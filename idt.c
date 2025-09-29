@@ -1,6 +1,6 @@
 #include "idt.h"
 #include "vga.h"
-
+#include "syscall.h"
 static struct idt_entry idt[256];
 static struct idt_ptr ip;
 
@@ -209,7 +209,7 @@ void idt_install(void) {
     idt_set_gate(45, (uint32_t)irq13, 0x08, 0x8E);
     idt_set_gate(46, (uint32_t)irq14, 0x08, 0x8E);
     idt_set_gate(47, (uint32_t)irq15, 0x08, 0x8E);
-
+    idt_set_gate(128,(uint32_t)isr128,0x08,0xEE);
     asm volatile("lidt %0" : : "m"(ip));
     asm volatile("sti");
 }
