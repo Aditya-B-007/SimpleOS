@@ -1,4 +1,4 @@
-//Identity-map the first 4MB of physical memory
+ed//Identity-map the first 4MB of physical memory
 #include <stdint.h>
 #include "paging.h"
 #include "vga.h"
