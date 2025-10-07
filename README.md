@@ -117,17 +117,13 @@ Once the system boots, you'll see the SimpleOS shell prompt:
 SimpleOS> 
 ```
 
-Available commands:
-- `help` - Display available commands
-- `clear` - Clear the screen
-- `about` - Show system information
-- `reboot` - Reboot the system
-- `halt` - Halt the system
+The agent will process your request and respond accordingly.
 
-The shell supports:
-- Basic command input with Enter to execute
-- Backspace for editing
-- Automatic scrolling when screen is full
+### Example Interactions
+- `> what time is it?`
+- `> create a new file named notes.txt`
+- `> tell me about the CPU`
+- `> reboot the machine in 5 minutes`
 
 ## File Structure
 
@@ -141,7 +137,7 @@ SimpleOS/
 │   ├── idt.c/.h          # Interrupt Descriptor Table  
 │   ├── vga.c/.h          # VGA text driver
 │   ├── keyboard.c/.h     # PS/2 keyboard driver
-│   ├── shell.c/.h        # Interactive command shell
+│   ├── agent.c/.h        # The core AI agent logic
 │   └── interrupt.asm     # Assembly interrupt handlers
 ├── build/                # Build output (auto-generated)
 ├── Makefile             # Build configuration
@@ -172,13 +168,11 @@ SimpleOS/
 
 Future development is focused on expanding the kernel's capabilities. Key areas on our roadmap include:
 
-- **System Call Interface**: A formal system call API for user-kernel interaction.
-- **Advanced Drivers**: Support for timers (IRQ0) and other hardware.
-- **Dynamic Memory Management**: A robust heap allocator (`malloc`/`free`).
-- **Process and Task Management**: Implementation of multitasking and scheduling.
+- **Agent Tooling**: Expanding the set of kernel functions (tools) the LLM agent can use.
+- **Long-Term Memory**: Implementing a file system to give the agent persistent memory.
+- **Multitasking**: Allowing the agent to manage and execute multiple background processes.
 
 ### Debugging
-- Use QEMU with GDB: `qemu-system-i386 -s -S -fda build/os.img`
 - Connect GDB: `gdb -ex "target remote :1234"`
 - Enable QEMU monitor: Add `-monitor stdio`
 
@@ -188,7 +182,7 @@ SimpleOS is an open-source product and we welcome contributions from the communi
 
 ## License
 
-This product is released under the Apache 2.0 License. See the LICENSE file for details.
+This product is released under the MIT License. See the LICENSE file for details.
 
 ## References
 
