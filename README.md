@@ -182,7 +182,7 @@ SimpleOS is an open-source product and we welcome contributions from the communi
 
 ## License
 
-This product is released under the MIT License. See the LICENSE file for details.
+This product is released under the Apache 2.0 License. See the LICENSE file for details.
 
 ## References
 
