@@ -48,7 +48,7 @@ global irq12
 global irq13
 global irq14
 global irq15
-
+global isr128
 extern isr_handler
 extern irq_handler
 
@@ -107,7 +107,7 @@ isr_no_error 28
 isr_no_error 29
 isr_no_error 30
 isr_no_error 31
-
+isr_no_error 128
 irq_stub 0, 32
 irq_stub 1, 33
 irq_stub 2, 34
@@ -170,5 +170,4 @@ irq_common_stub:
 
     popa
     add esp, 8
-    sti
     iret
