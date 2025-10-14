@@ -8,19 +8,40 @@
 #include "timer.h"
 #include "paging.h"
 //#include "pci.h"
+#include "graphics.h"
+#include "widget.h"
+#include "font.h"
+#include <stddef.h>
 #include "NIC.h"
 #include "pmm.h"
 #include "task.h"
 #include "syscall.h"
+#include "window.h"
 void counter_task(){
     int i=0;
     while(1){
         vga_putentryat('A' + (i++%26),0x0F,79,0);
     }
 }
-
-// Assuming vbe_mode_info is provided by the bootloader.
-// This is a common structure for VBE mode information.
+Widget* widget_list_head=NULL;
+Window* window_list_head=NULL;
+Window* window_list_tail=NULL;
+void on_my_button_click(){
+    if(!g_widget_font)return;
+    ButtonData* data=(ButtonData*)widget_list_head->data;
+    if(!data)return;
+    data->bg_color=data->press_color;
+    data->border_color=data->press_border;
+    //vga_print_string("Button clicked!\n");
+}
+void on_my_button_release(){
+    if(!g_widget_font)return;
+    ButtonData* data=(ButtonData*)widget_list_head->data;
+    if(!data)return;
+    data->bg_color=data->base_color;
+    data->border_color=data->border_color;
+    //vga_print_string("Button released!\n");
+}
 typedef struct {
     uint16_t attributes;
     uint8_t window_a, window_b;
@@ -70,6 +91,11 @@ void kernel_main(void) {
     fb.pitch=vbe_mode_info.pitch;
     fb.bitsPerPixel=vbe_mode_info.bitsPerPixel;
     fb.bytesPerPixel = vbe_mode_info.bitsPerPixel / 8;
+    Font my_font;
+    my_font.char_width=8;
+    my_font.char_height=16;
+    my_font.bitmap=NULL; // Assume a function to load a bitmap font
+
     if (fb.bitsPerPixel != 24) {
         vga_print_string("Error: Graphics mode is not 24-bit color depth!\n");
         for(;;) { asm volatile("cli; hlt"); }
@@ -79,6 +105,32 @@ void kernel_main(void) {
 
     clear_screen(&fb, 0x000000);
     draw_circle(&fb, xc, yc, 50,  0xFFFFFF);
+    Window* main_window = create_window(100, 100, 400, 300, (char*[]){"Main Window"}, true);
+    if (!main_window) {
+        vga_print_string("Error: Failed to create main window!\n");
+        for(;;) { asm volatile("cli; hlt"); }
+    }
+    Widget* label = create_label(20, 40, 200, 30, "Hello, SimpleOS!", 0x000000);
+    if (!label) {
+        vga_print_string("Error: Failed to create label widget!\n");
+        for(;;) { asm volatile("cli; hlt"); }
+    }
+    Widget* button = create_button(100, 100, 100, 50, "Click Me", 0x0000FF, 0x00FF00, 0xFF0000, 0x000000, 2, 0xFFFFFF, 0xFFFF00, 0x00FFFF);
+    if (!button) {
+        vga_print_string("Error: Failed to create button widget!\n");
+        for(;;) { asm volatile("cli; hlt"); }
+    }
+    widget_add(&widget_list_head, label);
+    widget_add(&widget_list_head, button);
+    window_add_widget(main_window, label);
+    window_add_widget(main_window, button);
+    window_draw(main_window, &fb);
+    button->onClick = (void (*)(struct Widget*, int, int, int))on_my_button_click;
+    button->onRelease = (void (*)(struct Widget*, int, int, int))on_my_button_release;
+    window_list_head = main_window;
+    window_list_tail = main_window;
+    init_widget_system();
+    widget_set_font(&my_font);
     //Scheduler takes over, chillax!!
     while(1) {
         asm volatile("hlt");
