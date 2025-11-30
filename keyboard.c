@@ -71,8 +71,6 @@ void keyboard_handler(registers_t *r) {
             }
             
             if (ch != 0) {
-                shell_handle_input(ch);
-                
                 int next_end = (buffer_end + 1) % 256;
                 if (next_end != buffer_start) {
                     key_buffer[buffer_end] = ch;

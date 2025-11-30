@@ -14,6 +14,7 @@ typedef struct{
     struct Window* parent;
     struct Window* child;
     struct Window* sibling;
+    bool close_button_hovered;
 
 }Window;
 Window* create_window(int x,int y,int width,int height,char** title,bool has_title_bar);
@@ -25,4 +26,8 @@ void window_on_click(Window* window,int mouse_x,int mouse_y,int button);
 void window_on_hover(Window* window,int mouse_x,int mouse_y);
 void window_on_release(Window* window,int mouse_x,int mouse_y,int button);
 void window_on_move(Window* window,int mouse_x,int mouse_y);
+void wm_process_mouse(int mouse_x,int mouse_y,uint8_t mouse_buttons,uint8_t last_buttons);
+void window_destroy(Window** head, Window** tail, Window* win_to_destroy);
+void window_bring_to_front(Window** head, Window** tail, Window* win);
+void window_manager_handle_mouse(Window** head, Window** tail, int32_t mouse_x, int32_t mouse_y, uint8_t mouse_buttons, uint8_t last_buttons);
 #endif
