@@ -17,6 +17,8 @@
 #include "task.h"
 #include "syscall.h"
 #include "window.h"
+#include "mouse.h"
+#include "cursor.h"
 void counter_task(){
     int i=0;
     while(1){
@@ -32,16 +34,13 @@ void on_my_button_click(){
     if(!data)return;
     data->bg_color=data->press_color;
     data->border_color=data->press_border;
-    //vga_print_string("Button clicked!\n");
 }
 void on_my_button_release(){
     if(!g_widget_font)return;
     ButtonData* data=(ButtonData*)widget_list_head->data;
     if(!data)return;
     data->bg_color=data->base_color;
-    data->border_color=data->border_color;
-    //vga_print_string("Button released!\n");
-}
+    data->border_color=data->border_color;}
 typedef struct {
     uint16_t attributes;
     uint8_t window_a, window_b;
@@ -53,7 +52,6 @@ typedef struct {
     uint8_t chars_x, chars_y, planes, bitsPerPixel, banks;
     uint8_t memory_model, bank_size, image_pages;
     uint8_t reserved0;
-    // ... other fields might follow
     uint32_t physbase;
 } __attribute__((packed)) vbe_mode_info_t;
 
@@ -75,6 +73,8 @@ void kernel_main(void) {
     timer_install();
     rtl8139_init();
     tasking_install();
+    mouse_install();
+    cursor_init();
     create_task("shell",shell_init);
     create_task("counter",counter_task);
     uint32_t free_mem = pmm_get_free_memory();
@@ -132,7 +132,38 @@ void kernel_main(void) {
     init_widget_system();
     widget_set_font(&my_font);
     //Scheduler takes over, chillax!!
+
+    #define CURSOR_TRAIL_LENGTH 8
+    struct { int32_t x, y; } cursor_history[CURSOR_TRAIL_LENGTH] = {0};
+    int history_index = 0;
+
+    uint8_t last_buttons = 0;
+    int32_t last_x = -1, last_y = -1; 
+
     while(1) {
+        window_manager_handle_mouse(&window_list_head, &window_list_tail, mouse_x, mouse_y, mouse_buttons, last_buttons);
+        wm_process_mouse(mouse_x, mouse_y, mouse_buttons, last_buttons);
+        cursor_update(&fb, mouse_x, mouse_y);
+        widget_update_all(widget_list_head, &fb);
+        window_update_all(window_list_head, &fb);
+        if(mouse_buttons != last_buttons || mouse_x != last_x || mouse_y != last_y) {
+            window_draw_all(window_list_head, &fb);
+            last_x = mouse_x;
+            last_y = mouse_y;
+            cursor_history[history_index].x = mouse_x;
+            cursor_history[history_index].y = mouse_y;
+            history_index = (history_index + 1) % CURSOR_TRAIL_LENGTH;
+            for (int i = 0; i < CURSOR_TRAIL_LENGTH; i++) { 
+                int current_idx = (history_index - 1 - i + CURSOR_TRAIL_LENGTH) % CURSOR_TRAIL_LENGTH;
+                int32_t x = cursor_history[current_idx].x;
+                int32_t y = cursor_history[current_idx].y;
+                // Fade the tail from white to gray
+                uint8_t intensity = 255 - (i * (255 / CURSOR_TRAIL_LENGTH));
+                uint32_t color = (intensity << 16) | (intensity << 8) | intensity;
+                fb_set_pixel(&fb, x, y, color);
+            }
+            last_buttons = mouse_buttons;
+        }
         asm volatile("hlt");
     }
 }

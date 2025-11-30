@@ -44,6 +44,7 @@ void clear_screen(FrameBuffer* fb, uint32_t color);
 void put_pixel(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t color);
 void draw_line(FrameBuffer* fb, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1, uint32_t color);
 void draw_rectangle(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
+void fill_rectangle(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
 void draw_circle(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t radius, uint32_t color);
 void draw_bitmap(FrameBuffer* fb, Bitmap* bmp, uint32_t x, uint32_t y, uint32_t color);
 void draw_char(FrameBuffer* fb, Font* font, char c, uint32_t x, uint32_t y, uint32_t color);
