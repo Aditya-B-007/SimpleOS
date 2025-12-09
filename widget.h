@@ -32,6 +32,14 @@ typedef enum {
     WIDGET_RADIOGROUP,
     WIDGET_VOICEINPUT
 }WidgetType;
+
+typedef enum {
+    EVENT_MOUSE_CLICK = 1,
+    EVENT_MOUSE_RELEASE = 2,
+    EVENT_MOUSE_HOVER = 3,
+    EVENT_MOUSE_MOVE = 4,
+} event_type_t;
+
 typedef struct Widget{
     WidgetType type;
     int x,y,width,height;

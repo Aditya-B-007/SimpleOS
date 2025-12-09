@@ -1,6 +1,8 @@
 #include "window.h"
 #include <stdlib.h>
 #include <string.h>
+#include "sync.h"
+#include "dirty_rect.h"
 #define WINDOW_BG_COLOR   0xECECEC   
 #define TITLE_BAR_COLOR   0x2C2C2C   
 #define TITLE_TEXT_COLOR  0xFFFFFF   
@@ -14,8 +16,10 @@
 extern Font* g_widget_font;
 extern Window* window_list_head;
 extern Window* window_list_tail;
+static spinlock_t wm_lock;
 static Widget* last_hivered_widget = NULL;
-Window* create_window(int x,int y,int width,int height,char** title,bool has_title_bar){
+static Window* focused_window = NULL;
+Window* create_window(int x,int y,int width,int height,const char* title,bool has_title_bar){
     Window* window=(Window*)malloc(sizeof(Window));
     if(!window)return NULL;
     window->x=x;
@@ -28,9 +32,6 @@ Window* create_window(int x,int y,int width,int height,char** title,bool has_tit
     window->child_widgets_tail=NULL;
     window->next=NULL;
     window->prev=NULL;
-    window->parent=NULL;
-    window->child=NULL;
-    window->sibling=NULL;
     window->close_button_hovered = false;
     return window;
 }
@@ -85,25 +86,19 @@ void window_free(Window* window){
 void window_draw(Window* window,FrameBuffer* fb){
     if(!window)return;
     // Draw window background
-    for(int y=0;y<window->height;y++){
-        for(int x=0;x<window->width;x++){
-            fb_set_pixel(fb,window->x+x,window->y+y,WINDOW_BG_COLOR);
-        }
-    }
+    fill_rectangle(fb, window->x, window->y, window->width, window->height, WINDOW_BG_COLOR);
+
     // Draw title bar if present
     if(window->has_title_bar&&window->title){
-        for(int y=0;y<TITLE_BAR_HEIGHT;y++){
-            for(int x=0;x<window->width;x++){
-                fb_set_pixel(fb,window->x+x,window->y+y,TITLE_BAR_COLOR);
-            }
-        }
+        fill_rectangle(fb, window->x, window->y, window->width, TITLE_BAR_HEIGHT, TITLE_BAR_COLOR);
+
         // Draw title text (centered)
         if(g_widget_font){
-            int text_width=strlen(*window->title)*g_widget_font->char_width;
+            int text_width=strlen(window->title)*g_widget_font->char_width;
             int text_height=g_widget_font->char_height;
             int text_x=window->x+window->width/2-text_width/2;
             int text_y=window->y+(TITLE_BAR_HEIGHT-text_height)/2;
-            draw_string(fb,text_x,text_y,*window->title,TITLE_TEXT_COLOR,g_widget_font);
+            draw_string(fb,text_x,text_y,window->title,TITLE_TEXT_COLOR,g_widget_font);
         }
 
         // Draw close button
@@ -134,30 +129,29 @@ void window_handle_event(Window* window,int mouse_x,int mouse_y,int event){
 }
 void window_on_click(Window* window,int mouse_x,int mouse_y,int button){
     if(!window)return;
-    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,1); // 1 for click
+    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,EVENT_MOUSE_CLICK);
 }
 void window_on_release(Window* window,int mouse_x,int mouse_y,int button){
     if(!window)return;
-    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,2); // 2 for release
+    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,EVENT_MOUSE_RELEASE);
 }
 void window_on_hover(Window* window,int mouse_x,int mouse_y){
     if(!window)return;
-    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,3); // 3 for hover
+    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,EVENT_MOUSE_HOVER);
 }
 void window_on_move(Window* window,int mouse_x,int mouse_y){
     if(!window)return;
-    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,4); // 4 for move
+    widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,EVENT_MOUSE_MOVE);
 }
-void widget_draw_all(Widget* head,FrameBuffer* fb){
-    Widget* current=head;
-    while(current){
-        widget_draw(current,fb);
-        current=current->next;
-    }
+
+void window_manager_init() {
+    spinlock_init(&wm_lock);
 }
 
 void window_destroy(Window** head, Window** tail, Window* win_to_destroy) {
     if (!win_to_destroy) return;
+
+    spinlock_acquire(&wm_lock);
 
     // Unlink from the list
     if (win_to_destroy->prev) {
@@ -165,7 +159,6 @@ void window_destroy(Window** head, Window** tail, Window* win_to_destroy) {
     } else { // It's the head
         *head = win_to_destroy->next;
     }
-
     if (win_to_destroy->next) {
         win_to_destroy->next->prev = win_to_destroy->prev;
     } else { // It's the tail
@@ -173,6 +166,8 @@ void window_destroy(Window** head, Window** tail, Window* win_to_destroy) {
     }
 
     // Free associated widgets and the window itself
+    spinlock_release(&wm_lock);
+
     window_free_widgets(win_to_destroy);
     free(win_to_destroy);
 }
@@ -182,6 +177,8 @@ void window_bring_to_front(Window** head, Window** tail, Window* win) {
     if (!win || *tail == win) {
         return; // Already at the front or invalid window
     }
+
+    spinlock_acquire(&wm_lock);
 
     // Unlink from current position
     if (win->prev) {
@@ -201,6 +198,8 @@ void window_bring_to_front(Window** head, Window** tail, Window* win) {
     win->prev = *tail;
     win->next = NULL;
     *tail = win;
+
+    spinlock_release(&wm_lock);
 }
 
 // State for window dragging, kept static within this file
@@ -209,6 +208,8 @@ static int32_t drag_offset_x = 0;
 static int32_t drag_offset_y = 0;
 
 void window_manager_handle_mouse(Window** head, Window** tail, int32_t mouse_x, int32_t mouse_y, uint8_t mouse_buttons, uint8_t last_buttons) {
+
+    spinlock_acquire(&wm_lock);
 
     Window* top_win = *tail;
     if (top_win) {
@@ -235,8 +236,9 @@ void window_manager_handle_mouse(Window** head, Window** tail, int32_t mouse_x, 
             if (mouse_x >= btn_x && mouse_x < btn_x + CLOSE_BUTTON_WIDTH &&
                 mouse_y >= btn_y && mouse_y < btn_y + CLOSE_BUTTON_HEIGHT) {
                 
-                window_destroy(head, tail, win);
-                // Don't proceed to drag checks
+                window_destroy(head, tail, win); // This function handles its own locking
+                spinlock_release(&wm_lock);      // Release lock before returning
+                return;                          // Exit immediately after destroying window
 
             } else if (mouse_x >= win->x && mouse_x < win->x + win->width &&
                        mouse_y >= win->y && mouse_y < win->y + TITLE_BAR_HEIGHT) {
@@ -259,35 +261,14 @@ void window_manager_handle_mouse(Window** head, Window** tail, int32_t mouse_x, 
 
     // 3. Mouse moved while dragging
     if (dragged_window != NULL) {
+        // Invalidate the old position of the window before moving it
+        dirty_rect_add(dragged_window->x, dragged_window->y, dragged_window->width, dragged_window->height);
+
         dragged_window->x = mouse_x - drag_offset_x;
         dragged_window->y = mouse_y - drag_offset_y;
     }
-}
-void widget_draw(Widget* widget,FrameBuffer* fb){
-    if(!widget||!widget->draw)return;
-    widget->draw(widget,fb);
-}
-void widget_update(Widget* widget,FrameBuffer* fb){
-    if(!widget||!widget->update)return;
-    widget->update(widget,fb);
-}
-void widget_handle_event(Widget* widget,int mouse_x,int mouse_y,int event){
-    if(!widget||!widget->handle_event)return;
-    widget->handle_event(widget,mouse_x,mouse_y,event);
-}
-void widget_handle_event_all(Widget* head,int mouse_x,int mouse_y,int event){
-    Widget* current=head;
-    while(current){
-        widget_handle_event(current,mouse_x,mouse_y,event);
-        current=current->next;
-    }
-}
-void widget_draw_all(Widget* head,FrameBuffer* fb){
-    Widget* current=head;
-    while(current){
-        widget_draw(current,fb);
-        current=current->next;
-    }
+
+    spinlock_release(&wm_lock);
 }
 void widget_update_all(Widget* head,FrameBuffer* fb){
     Widget* current=head;
@@ -305,4 +286,37 @@ void widget_handle_event_all(Widget* head,int mouse_x,int mouse_y,int event){
 }
 void wm_process_mouse(int mouse_x,int mouse_y,uint8_t mouse_buttons,uint8_t last_buttons){
     window_manager_handle_mouse(&window_list_head,&window_list_tail,mouse_x,mouse_y,mouse_buttons,last_buttons);
+}
+void window_handle_key(char key){
+    if(!window_list_tail)return;
+    // For now, just a placeholder to show where key handling would go.
+    // In a real implementation, you'd route this to the focused window's widgets.
+}
+void window_draw_all(Window* head,FrameBuffer* fb){
+    spinlock_acquire(&wm_lock);
+    Window* current=head;
+    while(current){
+        window_draw(current,fb);
+        current=current->next;
+    }
+    spinlock_release(&wm_lock);
+}
+void window_set_focus(Window* window){
+    if(!window)return;
+    spinlock_acquire(&wm_lock);
+    window_bring_to_front(&window_list_head,&window_list_tail,window);
+    spinlock_release(&wm_lock);
+    focused_window=window;
+}
+Window* wm_get_focused_window(){
+    return focused_window;
+}
+void window_update_all(Window* head,FrameBuffer* fb){
+    spinlock_acquire(&wm_lock);
+    Window* current=head;
+    while(current){
+        window_update(current,fb);
+        current=current->next;
+    }
+    spinlock_release(&wm_lock);
 }

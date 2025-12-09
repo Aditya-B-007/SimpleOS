@@ -19,6 +19,7 @@
 #include "window.h"
 #include "mouse.h"
 #include "cursor.h"
+#include "dirty_rect.h"
 void counter_task(){
     int i=0;
     while(1){
@@ -29,18 +30,18 @@ Widget* widget_list_head=NULL;
 Window* window_list_head=NULL;
 Window* window_list_tail=NULL;
 void on_my_button_click(){
-    if(!g_widget_font)return;
     ButtonData* data=(ButtonData*)widget_list_head->data;
     if(!data)return;
     data->bg_color=data->press_color;
     data->border_color=data->press_border;
 }
 void on_my_button_release(){
-    if(!g_widget_font)return;
     ButtonData* data=(ButtonData*)widget_list_head->data;
     if(!data)return;
     data->bg_color=data->base_color;
-    data->border_color=data->border_color;}
+    data->border_color=data->border_color;
+}
+
 typedef struct {
     uint16_t attributes;
     uint8_t window_a, window_b;
@@ -130,6 +131,8 @@ void kernel_main(void) {
     window_list_head = main_window;
     window_list_tail = main_window;
     init_widget_system();
+    window_manager_init();
+    dirty_rect_init();
     widget_set_font(&my_font);
     //Scheduler takes over, chillax!!
 
@@ -140,30 +143,54 @@ void kernel_main(void) {
     uint8_t last_buttons = 0;
     int32_t last_x = -1, last_y = -1; 
 
+    // Initial full-screen draw
+    dirty_rect_add(0, 0, fb.width, fb.height);
+
     while(1) {
-        window_manager_handle_mouse(&window_list_head, &window_list_tail, mouse_x, mouse_y, mouse_buttons, last_buttons);
-        wm_process_mouse(mouse_x, mouse_y, mouse_buttons, last_buttons);
-        cursor_update(&fb, mouse_x, mouse_y);
-        widget_update_all(widget_list_head, &fb);
-        window_update_all(window_list_head, &fb);
-        if(mouse_buttons != last_buttons || mouse_x != last_x || mouse_y != last_y) {
-            window_draw_all(window_list_head, &fb);
+        // --- Input and State Update Phase ---
+        bool mouse_moved = (mouse_x != last_x || mouse_y != last_y);
+        bool buttons_changed = (mouse_buttons != last_buttons);
+
+        if (mouse_moved || buttons_changed) {
+            // Invalidate old cursor position
+            dirty_rect_add(last_x, last_y, 16, 16); // Assuming cursor size
+
+            // Handle window manager logic (dragging, etc.)
+            window_manager_handle_mouse(&window_list_head, &window_list_tail, mouse_x, mouse_y, mouse_buttons, last_buttons);
+
+            // Invalidate new cursor position
+            dirty_rect_add(mouse_x, mouse_y, 16, 16);
+
             last_x = mouse_x;
             last_y = mouse_y;
-            cursor_history[history_index].x = mouse_x;
-            cursor_history[history_index].y = mouse_y;
-            history_index = (history_index + 1) % CURSOR_TRAIL_LENGTH;
-            for (int i = 0; i < CURSOR_TRAIL_LENGTH; i++) { 
-                int current_idx = (history_index - 1 - i + CURSOR_TRAIL_LENGTH) % CURSOR_TRAIL_LENGTH;
-                int32_t x = cursor_history[current_idx].x;
-                int32_t y = cursor_history[current_idx].y;
-                // Fade the tail from white to gray
-                uint8_t intensity = 255 - (i * (255 / CURSOR_TRAIL_LENGTH));
-                uint32_t color = (intensity << 16) | (intensity << 8) | intensity;
-                fb_set_pixel(&fb, x, y, color);
-            }
             last_buttons = mouse_buttons;
         }
+
+        // --- Drawing Phase ---
+        int dirty_count;
+        const Rect* rects = dirty_rect_get_all(&dirty_count);
+
+        if (dirty_count > 0) {
+            // For each dirty rectangle, redraw all windows that intersect with it
+            for (int i = 0; i < dirty_count; i++) {
+                const Rect* dirty = &rects[i];
+                Window* current = window_list_head;
+                while (current) {
+                    // Simple intersection check
+                    if (!(current->x > dirty->x + dirty->width || current->x + current->width < dirty->x ||
+                          current->y > dirty->y + dirty->height || current->y + current->height < dirty->y)) {
+                        window_draw(current, &fb); // In a more advanced system, we'd clip the drawing.
+                    }
+                    current = current->next;
+                }
+            }
+            // After drawing, clear the list for the next frame.
+            dirty_rect_init();
+        }
+
+        // Always draw the cursor on top of the final scene
+        cursor_update(&fb, mouse_x, mouse_y);
+
         asm volatile("hlt");
     }
 }
