@@ -87,6 +87,10 @@ char keyboard_getchar(void) {
     }
     
     char ch = key_buffer[buffer_start];
+    if (ch !=0){
+        window_handle_key(ch);
+        shell_handle_input(ch);
+    }
     buffer_start = (buffer_start + 1) % 256;
     return ch;
 }

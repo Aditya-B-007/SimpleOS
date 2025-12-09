@@ -1,4 +1,5 @@
 #include "cursor.h"
+#include "dirty_rect.h"
 #define CURSOR_WIDTH 16
 #define CURSOR_HEIGHT 16
 static const uint8_t cursor_bitmap[CURSOR_HEIGHT][CURSOR_WIDTH / 8] = {
@@ -38,7 +39,7 @@ void cursor_draw(FrameBuffer* fb, int x, int y) {
             int fb_x = x + cx;
             int fb_y = y + cy;
             if (fb_x < 0 || fb_x >= fb->width || fb_y < 0 || fb_y >= fb->height) continue;
-            uint32_t* fb_pixel = (uint32_t*)((uint8_t*)fb->base_address + (fb_y * fb->pitch) + (fb_x * (fb->bitsPerPixel / 8)));
+            uint32_t* fb_pixel = (uint32_t*)((uint8_t*)fb->address + (fb_y * fb->pitch) + (fb_x * (fb->bitsPerPixel / 8)));
             if (cursor_bitmap[cy][byte_index] & mask) {
                 cursor_fg_buffer[cy * CURSOR_WIDTH + cx] = *fb_pixel;
                 *fb_pixel = 0xFFFFFFFF; // White color for cursor
@@ -58,12 +59,15 @@ void cursor_hide(void) {
 }
 void cursor_update(FrameBuffer* fb, int x, int y) {
     if (visible) {
+        // Invalidate the area where the cursor was
+        dirty_rect_add(prev_x, prev_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
         for (int cy = 0; cy < CURSOR_HEIGHT; cy++) {
             for (int cx = 0; cx < CURSOR_WIDTH; cx++) {
                 int fb_x = prev_x + cx;
                 int fb_y = prev_y + cy;
-                if (fb_x < 0 || fb_x >= fb->width || fb_y < 0 || fb_y >= fb->height) continue;
-                uint32_t* fb_pixel = (uint32_t*)((uint8_t*)fb->base_address + (fb_y * fb->pitch) + (fb_x * (fb->bitsPerPixel / 8)));
+                if (fb_x < 0 || fb_x >= (int)fb->width || fb_y < 0 || fb_y >= (int)fb->height) continue;
+                uint32_t* fb_pixel = (uint32_t*)((uint8_t*)fb->address + (fb_y * fb->pitch) + (fb_x * (fb->bitsPerPixel / 8)));
                 if (cursor_bitmap[cy][cx / 8] & (1 << (7 - (cx % 8)))) {
                     *fb_pixel = cursor_fg_buffer[cy * CURSOR_WIDTH + cx];
                 } else {
@@ -72,6 +76,9 @@ void cursor_update(FrameBuffer* fb, int x, int y) {
             }
         }
     }
+    // Invalidate the area where the cursor will be
+    dirty_rect_add(x, y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
     cursor_draw(fb, x, y);
 }
 #undef CURSOR_WIDTH
