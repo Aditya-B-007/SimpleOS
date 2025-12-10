@@ -1,5 +1,5 @@
-#include "heap.h"
-#include "sync.h"
+#include <heap.h>
+#include <sync.h>
 #define HEAP_ALIGNMENT 4
 #define HEAP_MAGIC 0x12345678
 

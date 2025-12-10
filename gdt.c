@@ -38,8 +38,8 @@ void gdt_flush(void) {
         "mov %%ax, %%fs\n\t"
         "mov %%ax, %%gs\n\t"
         "mov %%ax, %%ss\n\t"
-        "ljmp $0x08, $flush_cs\n\t"
-        "flush_cs:\n\t"
+        "ljmp $0x08, $1f\n\t"
+        "1:\n\t"
         :
         : "m"(gp)
         : "eax"

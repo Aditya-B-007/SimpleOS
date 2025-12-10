@@ -1,12 +1,7 @@
-# SimpleOS Flat Makefile
-
-# Tool definitions
 CC = i686-w64-mingw32-gcc
 LD = i686-w64-mingw32-ld
 OBJCOPY = i686-w64-mingw32-objcopy
 NASM = nasm
-
-# Flags: 32-bit, no standard libs, include current directory
 CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -I.
 
 # Auto-detect all .c files in the current folder

@@ -38,7 +38,7 @@ void cursor_draw(FrameBuffer* fb, int x, int y) {
             uint8_t mask = 1 << bit_index;
             int fb_x = x + cx;
             int fb_y = y + cy;
-            if (fb_x < 0 || fb_x >= fb->width || fb_y < 0 || fb_y >= fb->height) continue;
+            if (fb_x < 0 || fb_x >=(int)fb->width || fb_y < 0 || fb_y >= (int)fb->height) continue;
             uint32_t* fb_pixel = (uint32_t*)((uint8_t*)fb->address + (fb_y * fb->pitch) + (fb_x * (fb->bitsPerPixel / 8)));
             if (cursor_bitmap[cy][byte_index] & mask) {
                 cursor_fg_buffer[cy * CURSOR_WIDTH + cx] = *fb_pixel;
