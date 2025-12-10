@@ -24,29 +24,30 @@ typedef struct __attribute__((packed)){
 } VbeModeInfo;
 typedef struct{
     void* address;
-    uint32_t        width;
-    uint32_t        height;
-    uint32_t        pitch;
-    uint8_t         bitsPerPixel;
-    uint8_t         bytesPerPixel;
+    uint32_t width;
+    uint32_t height;
+    uint32_t pitch;
+    uint8_t bitsPerPixel;
+    uint8_t bytesPerPixel;
 } FrameBuffer;
 typedef struct {
     uint32_t width;
     uint32_t height;
-    uint8_t  data;
-}Bitmap;
+    uint8_t* data; 
+} Bitmap;
 typedef struct {
-    Bitmap* bitmap;
     uint32_t char_width;
     uint32_t char_height;
-}Font;
+    const uint8_t (*bitmap)[16]; 
+} Font;
 void clear_screen(FrameBuffer* fb, uint32_t color);
-void put_pixel(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t color);
-void draw_line(FrameBuffer* fb, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1, uint32_t color);
-void draw_rectangle(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
-void fill_rectangle(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
-void draw_circle(FrameBuffer* fb, uint32_t x, uint32_t y, uint32_t radius, uint32_t color);
-void draw_bitmap(FrameBuffer* fb, Bitmap* bmp, uint32_t x, uint32_t y, uint32_t color);
-void draw_char(FrameBuffer* fb, Font* font, char c, uint32_t x, uint32_t y, uint32_t color);
-void draw_string(FrameBuffer* fb, Font* font, const char* str, uint32_t x, uint32_t y, uint32_t color);
+void put_pixel(FrameBuffer* fb, int32_t x, int32_t y, uint32_t color);
+void draw_line(FrameBuffer* fb, int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color);
+void draw_rectangle(FrameBuffer* fb, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t color);
+void fill_rectangle(FrameBuffer* fb, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t color);
+void draw_circle(FrameBuffer* fb, int32_t x, int32_t y, int32_t radius, uint32_t color);
+void draw_bitmap(FrameBuffer* fb, Bitmap* bmp, int32_t x, int32_t y, uint32_t color);
+void draw_char(FrameBuffer* fb, Font* font, char c, int32_t x, int32_t y, uint32_t color);
+void draw_string(FrameBuffer* fb, Font* font, const char* str, int32_t x, int32_t y, uint32_t color);
+
 #endif

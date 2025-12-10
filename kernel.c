@@ -19,7 +19,10 @@
 #include "window.h"
 #include "mouse.h"
 #include "cursor.h"
+#include "heap.h"
+#include "console.h"
 #include "dirty_rect.h"
+#define VBE_INFO_PTR ((vbe_mode_info_t*)0x8000)
 void counter_task(){
     int i=0;
     while(1){
@@ -59,16 +62,30 @@ typedef struct {
 extern vbe_mode_info_t vbe_mode_info;
 
 void kernel_main(void) {
+    gdt_install();
+    idt_install();
+    pmm_init(128 * 1024 * 1024);
+    heap_init(0x00400000, 16 * 1024 * 1024); // 16 MB heap at 4 MB
     vga_init();
     vga_setcolor(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     
     vga_print_string("SimpleOS Kernel v1.0 [SECURED]\n");
     vga_print_string("===============================\n\n");
-    gdt_install();
-    idt_install();
     syscalls_install();
     paging_install();
-    pmm_init(128 * 1024 * 1024);
+    console_init();
+    FrameBuffer fb;
+    fb.address=(void*)vbe_mode_info.physbase;
+    fb.width=vbe_mode_info.resolution_x;
+    fb.height=vbe_mode_info.resolution_y;
+    fb.pitch=vbe_mode_info.pitch;
+    fb.bitsPerPixel=vbe_mode_info.bitsPerPixel;
+    fb.bytesPerPixel = vbe_mode_info.bitsPerPixel / 8;
+    Font my_font;
+    my_font.char_width=8;
+    my_font.char_height=16;
+    my_font.bitmap=NULL; // Assume a function to load a bitmap font
+    console_init_graphics(&fb,&my_font);
     asm volatile("sti");
     keyboard_install();
     timer_install();
@@ -85,18 +102,6 @@ void kernel_main(void) {
     vga_print_string("\nKernel initialization complete!\n");
     vga_print_string("Security features: Buffer overflow protection, bounds checking\n");
     vga_print_string("Starting shell...\n\n");
-    FrameBuffer fb;
-    fb.address=(void*)vbe_mode_info.physbase;
-    fb.width=vbe_mode_info.resolution_x;
-    fb.height=vbe_mode_info.resolution_y;
-    fb.pitch=vbe_mode_info.pitch;
-    fb.bitsPerPixel=vbe_mode_info.bitsPerPixel;
-    fb.bytesPerPixel = vbe_mode_info.bitsPerPixel / 8;
-    Font my_font;
-    my_font.char_width=8;
-    my_font.char_height=16;
-    my_font.bitmap=NULL; // Assume a function to load a bitmap font
-
     if (fb.bitsPerPixel != 24) {
         vga_print_string("Error: Graphics mode is not 24-bit color depth!\n");
         for(;;) { asm volatile("cli; hlt"); }
@@ -139,56 +144,41 @@ void kernel_main(void) {
     #define CURSOR_TRAIL_LENGTH 8
     struct { int32_t x, y; } cursor_history[CURSOR_TRAIL_LENGTH] = {0};
     int history_index = 0;
-
     uint8_t last_buttons = 0;
     int32_t last_x = -1, last_y = -1; 
-
-    // Initial full-screen draw
     dirty_rect_add(0, 0, fb.width, fb.height);
 
     while(1) {
-        // --- Input and State Update Phase ---
         bool mouse_moved = (mouse_x != last_x || mouse_y != last_y);
         bool buttons_changed = (mouse_buttons != last_buttons);
 
         if (mouse_moved || buttons_changed) {
-            // Invalidate old cursor position
-            dirty_rect_add(last_x, last_y, 16, 16); // Assuming cursor size
-
-            // Handle window manager logic (dragging, etc.)
+            dirty_rect_add(last_x, last_y, 16, 16); 
             window_manager_handle_mouse(&window_list_head, &window_list_tail, mouse_x, mouse_y, mouse_buttons, last_buttons);
-
-            // Invalidate new cursor position
             dirty_rect_add(mouse_x, mouse_y, 16, 16);
 
             last_x = mouse_x;
             last_y = mouse_y;
             last_buttons = mouse_buttons;
         }
-
-        // --- Drawing Phase ---
         int dirty_count;
         const Rect* rects = dirty_rect_get_all(&dirty_count);
 
         if (dirty_count > 0) {
-            // For each dirty rectangle, redraw all windows that intersect with it
             for (int i = 0; i < dirty_count; i++) {
                 const Rect* dirty = &rects[i];
                 Window* current = window_list_head;
                 while (current) {
-                    // Simple intersection check
                     if (!(current->x > dirty->x + dirty->width || current->x + current->width < dirty->x ||
                           current->y > dirty->y + dirty->height || current->y + current->height < dirty->y)) {
-                        window_draw(current, &fb); // In a more advanced system, we'd clip the drawing.
+                        window_draw(current, &fb); 
                     }
                     current = current->next;
                 }
             }
-            // After drawing, clear the list for the next frame.
             dirty_rect_init();
         }
 
-        // Always draw the cursor on top of the final scene
         cursor_update(&fb, mouse_x, mouse_y);
 
         asm volatile("hlt");

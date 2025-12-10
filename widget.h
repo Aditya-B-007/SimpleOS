@@ -1,6 +1,7 @@
 #ifndef WIDGET_H
 #define WIDGET_H
 #include "graphics.h"
+#include "font.h"
 #include <stdbool.h>
 struct Widget;
 typedef enum {
@@ -73,7 +74,11 @@ typedef struct{
 } ButtonData;
 //Below are the constructors.
 Widget* create_label(int x,int y,int width,int height,char* text,uint32_t color);
-Widget* create_button(int x,int y,int width,int height,char* text,uint32_t color,uint32_t bg_color,uint32_t border_color,int border_width,uint32_t base_color,int base_width,uint32_t text_color,uint32_t press_color,uint32_t press_border,uint32_t hover_color,uint32_t hover_border);
-Widget* create_checkbox(int x,int y,int width,int height,char* text,uint32_t color,uint32_t bg_color,uint32_t border_color,int border_width);
+//Widget* create_button(int x,int y,int width,int height,char* text,uint32_t color,uint32_t bg_color,uint32_t border_color,int border_width,uint32_t base_color,int base_width,uint32_t text_color,uint32_t press_color,uint32_t press_border,uint32_t hover_color,uint32_t hover_border);
+Widget* create_button(int x, int y, int w, int h, char* text, 
+                      uint32_t text_color, uint32_t base_color, uint32_t border_color);
+
+void widget_draw(Widget* widget, FrameBuffer* fb);
+//Widget* create_checkbox(int x,int y,int width,int height,char* text,uint32_t color,uint32_t bg_color,uint32_t border_color,int border_width);
 
 #endif

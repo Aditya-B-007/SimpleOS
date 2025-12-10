@@ -1,9 +1,7 @@
-#ifndef PAGING_H
+/* #ifndef PAGING_H
 #define PAGING_H
 #include <stdint.h>
-#include "idt.h" //This is for interrupt handling
-
-// Paging memory layout constants
+#include "idt.h" 
 #define PAGING_STRUCTURES_START ((uint32_t)&page_directory)
 #define PAGING_STRUCTURES_SIZE  (8192)  // 8KB for directory + table
 extern pt_entry_t page_directory[1024];
@@ -27,4 +25,17 @@ typedef struct pt_entry{
 void paging_install(void);
 uint32_t paging_get_reserved_start(void);
 uint32_t paging_get_reserved_end(void);
+#endif */
+
+#ifndef PAGING_H
+#define PAGING_H
+
+#include <stdint.h>
+typedef uint32_t pt_entry_t;
+
+void paging_install(void);
+void map_page(void *physaddr, void *virtualaddr, unsigned int flags);
+extern pt_entry_t page_directory[1024];
+extern pt_entry_t first_page_table[1024]; 
+
 #endif
