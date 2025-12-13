@@ -28,6 +28,7 @@ void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags);
 void irq_handler(registers_t *r);
 void isr_handler(registers_t *r);
 void irq_install_handler(int irq, void (*handler)(registers_t *r));
+void page_fault_handler(registers_t *r);
 
 extern void irq0(void);
 extern void irq1(void);
@@ -78,6 +79,5 @@ extern void isr28(void);
 extern void isr29(void);
 extern void isr30(void);
 extern void isr31(void);
-uint32_t inl(uint16_t port);
-void outl(uint16_t port, uint32_t val);
+extern void isr128(void);
 #endif

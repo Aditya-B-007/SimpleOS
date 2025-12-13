@@ -1,10 +1,11 @@
 #include "pci.h"
 #include "idt.h" 
 #include "vga.h"
+#include "io.h"
 #define PCI_CONFIG_ADDRESS 0xCF8
 #define PCI_CONFIG_DATA    0xCFC
 
-uint32_t pci_read_config(uint8_t bus, uint8_t device, uint8_t func, uint8_t offset) {
+uint32_t pci_read_config(uint16_t bus, uint8_t device, uint8_t func, uint8_t offset) {
     uint32_t address;
     uint32_t lbus = (uint32_t)bus;
     uint32_t ldevice = (uint32_t)device;
