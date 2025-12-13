@@ -17,7 +17,7 @@ TARGET_BPP equ 32
 ; Kernel placement
 KERNEL_TEMP_ADDR equ 0x1000 ; Segment 0x1000 (Physical 0x10000)
 KERNEL_TARGET_ADDR equ 0x100000 ; 1MB
-SECTORS_TO_READ  equ 60     ; Read 30KB
+SECTORS_TO_READ  equ 100    ; Read 50KB
 
 start:
     jmp 0:init_segments     ; Far jump to normalize CS

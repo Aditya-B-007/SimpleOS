@@ -9,17 +9,17 @@ typedef struct {
 
 /**
  * @brief Initializes a spinlock to the unlocked state.
- * @param lock Pointer to the spinlock.
+ * @param lock Pointer to the spinlock
  */
 static inline void spinlock_init(spinlock_t* lock) {
-    lock->locked = false;
+    lock->locked = 0;
 }
 
 /**
  * @brief Acquires the spinlock, spinning until it is free.
  * This uses an atomic test-and-set operation.
  * @param lock Pointer to the spinlock.
- */
+ */ 
 static inline void spinlock_acquire(spinlock_t* lock) {
     while (__atomic_test_and_set(&lock->locked, __ATOMIC_ACQUIRE));
 }

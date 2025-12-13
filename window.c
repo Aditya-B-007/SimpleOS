@@ -17,7 +17,6 @@ extern Font* g_widget_font;
 extern Window* window_list_head;
 extern Window* window_list_tail;
 static spinlock_t wm_lock;
-static Widget* last_hivered_widget = NULL;
 static Window* focused_window = NULL;
 Window* create_window(int x,int y,int width,int height,const char* title,bool has_title_bar){
     Window* window=(Window*)malloc(sizeof(Window));
@@ -98,7 +97,7 @@ void window_draw(Window* window,FrameBuffer* fb){
             int text_height=g_widget_font->char_height;
             int text_x=window->x+window->width/2-text_width/2;
             int text_y=window->y+(TITLE_BAR_HEIGHT-text_height)/2;
-            draw_string(fb,text_x,text_y,window->title,TITLE_TEXT_COLOR,g_widget_font);
+            draw_string(fb,g_widget_font,window->title,text_x,text_y,TITLE_TEXT_COLOR);
         }
 
         // Draw close button
@@ -128,10 +127,12 @@ void window_handle_event(Window* window,int mouse_x,int mouse_y,int event){
     widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,event);
 }
 void window_on_click(Window* window,int mouse_x,int mouse_y,int button){
+    (void)button;
     if(!window)return;
     widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,EVENT_MOUSE_CLICK);
 }
 void window_on_release(Window* window,int mouse_x,int mouse_y,int button){
+    (void)button;
     if(!window)return;
     widget_handle_event_all(window->child_widgets_head,mouse_x,mouse_y,EVENT_MOUSE_RELEASE);
 }
@@ -270,24 +271,11 @@ void window_manager_handle_mouse(Window** head, Window** tail, int32_t mouse_x, 
 
     spinlock_release(&wm_lock);
 }
-void widget_update_all(Widget* head,FrameBuffer* fb){
-    Widget* current=head;
-    while(current){
-        widget_update(current,fb);
-        current=current->next;
-    }
-}
-void widget_handle_event_all(Widget* head,int mouse_x,int mouse_y,int event){
-    Widget* current=head;
-    while(current){
-        widget_handle_event(current,mouse_x,mouse_y,event);
-        current=current->next;
-    }
-}
 void wm_process_mouse(int mouse_x,int mouse_y,uint8_t mouse_buttons,uint8_t last_buttons){
     window_manager_handle_mouse(&window_list_head,&window_list_tail,mouse_x,mouse_y,mouse_buttons,last_buttons);
 }
 void window_handle_key(char key){
+    (void)key;
     if(!window_list_tail)return;
     // For now, just a placeholder to show where key handling would go.
     // In a real implementation, you'd route this to the focused window's widgets.

@@ -40,7 +40,6 @@ void pmm_init(uint32_t memory_end_bytes) {
     }
     page_frame_database = (page_frame_t*)(uintptr_t)KERNEL_RESERVED_END;
     uint32_t usable_start = reserved_pages;
-    uint32_t usable_pages = total_pages - reserved_pages;
     for (uint32_t i = 0; i < total_pages; ++i) {
         page_frame_database[i].state = PAGE_STATE_FREE;
         page_frame_database[i].order = 0;
@@ -100,6 +99,38 @@ void* pmm_alloc_page(void) {
         block->next = block->prev = NULL;
         uint32_t idx = (uint32_t)(block - page_frame_database);
         return addr_from_idx(idx);
+    }
+    return NULL;
+}
+
+void* pmm_alloc_pages(uint32_t count) {
+    int order = 0;
+    while ((1u << order) < count) {
+        order++;
+    }
+    if (order > MAX_ORDER) return NULL;
+
+    for (int i = order; i <= MAX_ORDER; ++i) {
+        if (!free_lists[i]) continue;
+        page_frame_t* block = free_lists[i];
+        free_lists[i] = block->next;
+        if (free_lists[i]) free_lists[i]->prev = NULL;
+
+        while (i > order) {
+            i--;
+            uint32_t base_idx = (uint32_t)(block - page_frame_database);
+            uint32_t buddy_idx = base_idx + (1u << i);
+            page_frame_t* buddy = &page_frame_database[buddy_idx];
+            buddy->order = (uint8_t)i;
+            buddy->state = PAGE_STATE_FREE;
+            buddy->next = free_lists[i];
+            if (free_lists[i]) free_lists[i]->prev = buddy;
+            buddy->prev = NULL;
+            free_lists[i] = buddy;
+        }
+        block->order = (uint8_t)order;
+        block->state = PAGE_STATE_USED;
+        return addr_from_idx((uint32_t)(block - page_frame_database));
     }
     return NULL;
 }
