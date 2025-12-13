@@ -38,7 +38,7 @@ void create_task(char* name, void (*entry_point)(void)) {
     // Since the x86 stack grows downward, set the initial stack pointer
     // to the *top* of the page by adding PAGE_SIZE.
     // Use explicit cast to avoid pointer arithmetic surprises.
-    new_task->kernel_stack = (uint32_t)pmm_alloc_page() + PAGE_SIZE;
+    new_task->kernel_stack = (void*)((uint32_t)pmm_alloc_page() + PAGE_SIZE);
     uint32_t stack_top = (uint32_t)new_task->kernel_stack;
     registers_t* initial_regs = (registers_t*)(stack_top - sizeof(registers_t));
     memset(initial_regs, 0, sizeof(registers_t));
@@ -103,4 +103,9 @@ void schedule(registers_t* r) {
 
     // Restore the state of the new current task
     *r = current_task->regs;
+}
+
+void schedule_and_release_lock(spinlock_t* lock, unsigned long flags) {
+    spinlock_release_irqrestore(lock, flags);
+    schedule_from_yield();
 }

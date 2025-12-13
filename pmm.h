@@ -17,6 +17,7 @@ typedef struct page_frame {
 } page_frame_t;
 void pmm_init(uint32_t memory_end);
 void* pmm_alloc_page(void);
+void* pmm_alloc_pages(uint32_t count);
 void pmm_free_page(void* p);
 uint32_t pmm_get_free_memory(void);
 #endif

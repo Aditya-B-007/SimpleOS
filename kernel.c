@@ -12,7 +12,7 @@
 #include "widget.h"
 #include "font.h"
 #include <stddef.h>
-#include "NIC.h"
+#include "nic.h"
 #include "pmm.h"
 #include "task.h"
 #include "syscall.h"
@@ -22,6 +22,7 @@
 #include "heap.h"
 #include "console.h"
 #include "dirty_rect.h"
+#include <string.h>
 #define VBE_INFO_PTR ((vbe_mode_info_t*)0x8000)
 void counter_task(){
     int i=0;
@@ -59,11 +60,12 @@ typedef struct {
     uint32_t physbase;
 } __attribute__((packed)) vbe_mode_info_t;
 
-extern vbe_mode_info_t vbe_mode_info;
+vbe_mode_info_t vbe_mode_info = {0};
 
 void kernel_main(void) {
     gdt_install();
     idt_install();
+    memcpy(&vbe_mode_info, (void*)0x8000, sizeof(vbe_mode_info_t));
     pmm_init(128 * 1024 * 1024);
     heap_init(0x00400000, 16 * 1024 * 1024); // 16 MB heap at 4 MB
     vga_init();
@@ -73,7 +75,6 @@ void kernel_main(void) {
     vga_print_string("===============================\n\n");
     syscalls_install();
     paging_install();
-    console_init();
     FrameBuffer fb;
     fb.address=(void*)vbe_mode_info.physbase;
     fb.width=vbe_mode_info.resolution_x;
@@ -85,7 +86,7 @@ void kernel_main(void) {
     my_font.char_width=8;
     my_font.char_height=16;
     my_font.bitmap=NULL; // Assume a function to load a bitmap font
-    console_init_graphics(&fb,&my_font);
+    console_init(&fb, &my_font);
     asm volatile("sti");
     keyboard_install();
     timer_install();
@@ -111,7 +112,7 @@ void kernel_main(void) {
 
     clear_screen(&fb, 0x000000);
     draw_circle(&fb, xc, yc, 50,  0xFFFFFF);
-    Window* main_window = create_window(100, 100, 400, 300, (char*[]){"Main Window"}, true);
+    Window* main_window = create_window(100, 100, 400, 300, "Welcome to SimpleOS!", true);
     if (!main_window) {
         vga_print_string("Error: Failed to create main window!\n");
         for(;;) { asm volatile("cli; hlt"); }
@@ -121,7 +122,7 @@ void kernel_main(void) {
         vga_print_string("Error: Failed to create label widget!\n");
         for(;;) { asm volatile("cli; hlt"); }
     }
-    Widget* button = create_button(100, 100, 100, 50, "Click Me", 0x0000FF, 0x00FF00, 0xFF0000, 0x000000, 2, 0xFFFFFF, 0xFFFF00, 0x00FFFF);
+    Widget* button = create_button(100, 100, 100, 50, "Click Me", 0xFFFFFF, 0x0000FF, 0x000000, 0x000000, 1, 0x000000, 0x000000, 0x000000);
     if (!button) {
         vga_print_string("Error: Failed to create button widget!\n");
         for(;;) { asm volatile("cli; hlt"); }
@@ -141,9 +142,6 @@ void kernel_main(void) {
     widget_set_font(&my_font);
     //Scheduler takes over, chillax!!
 
-    #define CURSOR_TRAIL_LENGTH 8
-    struct { int32_t x, y; } cursor_history[CURSOR_TRAIL_LENGTH] = {0};
-    int history_index = 0;
     uint8_t last_buttons = 0;
     int32_t last_x = -1, last_y = -1; 
     dirty_rect_add(0, 0, fb.width, fb.height);

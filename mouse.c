@@ -1,8 +1,7 @@
 #include "mouse.h"
 #include "vga.h"
-#include "ports.h"
-#include "isr.h"
-#include "idt.h"
+#include "idt.h" 
+#include "io.h"
 #define MOUSE_DATA_PORT 0x60
 #define MOUSE_STATUS_PORT 0x64
 #define MOUSE_COMMAND_PORT 0x64
@@ -14,33 +13,6 @@ uint8_t mouse_cycle = 0;
 int8_t mouse_byte[3];
 mouse_packet_t mouse_packet;
 static void mouse_handler(registers_t *regs);
-static void mouse_wait(uint8_t a_type) {
-    uint32_t _time_out = 100000;
-    if (a_type == 0) {
-        while (_time_out--) {
-            if ((inb(MOUSE_STATUS_PORT) & 1) == 1) {
-                return;
-            }
-        }
-        return;
-    } else {
-        while (_time_out--) {
-            if ((inb(MOUSE_STATUS_PORT) & 2) == 0) {
-                return;
-            }
-        }
-        return;
-    }
-}
-static void mouse_write(uint8_t data) {
-    mouse_wait(0);
-    outb(MOUSE_DATA_PORT, data);
-    mouse_wait(1);
-}
-static uint8_t mouse_read() {
-    mouse_wait(0);
-    return inb(MOUSE_DATA_PORT);
-}
 
 void mouse_install(void) {
     // Enable the auxiliary mouse device
@@ -60,9 +32,10 @@ void mouse_install(void) {
     outb(MOUSE_DATA_PORT, 0xF4);
     inb(MOUSE_DATA_PORT); // Acknowledge
     // Register the mouse handler
-    register_interrupt_handler(MOUSE_IRQ + 32, mouse_handler);
+    irq_install_handler(MOUSE_IRQ, mouse_handler);
 }
-void mouse_handler(registers_t *regs) {
+static void mouse_handler(registers_t *regs) {
+    (void)regs;
     static uint8_t packet_byte_index = 0;
     static mouse_packet_t packet;
     uint8_t status = inb(MOUSE_STATUS_PORT);

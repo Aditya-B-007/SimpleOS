@@ -160,6 +160,7 @@ void idt_install(void) {
 }
 
 void page_fault_handler(registers_t *r) {
+    (void)r;
     uint32_t faulting_address;
     asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
     vga_print_string("Page Fault at 0x");

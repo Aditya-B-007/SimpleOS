@@ -14,6 +14,7 @@ typedef struct Window {
     bool close_button_hovered;
 
 }Window;
+void window_manager_init(void);
 Window* create_window(int x,int y,int width,int height,const char* title,bool has_title_bar);
 void window_add_widget(Window* window,Widget* widget);
 void window_remove_widget(Window* window,Widget* widget);

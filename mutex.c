@@ -2,8 +2,6 @@
 #include "idt.h"
 #include "vga.h"
 #include "spinlock.h"
-extern void schedule(void);//Generic scheduler call
-extern task_t* get_current_task(void);//Function to get the current task
 void mutex_init(mutex_t* mutex){
     spinlock_init(&mutex->lock);//Initializing the guard
     mutex->locked = false;

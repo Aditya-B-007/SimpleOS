@@ -1,5 +1,6 @@
 #include "timer.h"
 #include "task.h" 
+#include "io.h"
 volatile uint32_t ticks = 0;
 void timer_handler(registers_t *r) {
     ticks++;

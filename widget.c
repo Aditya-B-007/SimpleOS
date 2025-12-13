@@ -8,7 +8,7 @@
 #include "memory.h"
 #include "shell.h"
 #include "pci.h"
-static Font* g_widget_font=NULL;
+Font* g_widget_font=NULL;
 void widget_set_font(Font* font){
     g_widget_font=font;
 }
@@ -16,10 +16,10 @@ void draw_label(Widget* self,FrameBuffer* fb){
     if(!g_widget_font)return;
     LabelData* data=(LabelData*)self->data;
     if(!data||!data->text)return;
-    draw_string(fb,self->x,self->y,data->text,data->color,g_widget_font);
+    draw_string(fb, g_widget_font, data->text, self->x, self->y, data->color);
 }
 void update_label(Widget* self,FrameBuffer* fb){
-    // Labels are static, no update needed
+    (void)self; (void)fb;
 }
 void draw_button(Widget* self,FrameBuffer* fb){
     if(!g_widget_font)return;
@@ -42,7 +42,7 @@ void draw_button(Widget* self,FrameBuffer* fb){
                     color=data->base_color;
                 }
             }
-            fb_set_pixel(fb,self->x+x,self->y+y,color);
+            put_pixel(fb,self->x+x,self->y+y,color);
         }
     }
     // Draw button border
@@ -51,7 +51,7 @@ void draw_button(Widget* self,FrameBuffer* fb){
             for(int x=i;x<self->width-i;x++){
                 uint32_t color=data->border_color;
                 if(x==i||x==self->width-i-1||y==i||y==self->height-i-1){
-                    fb_set_pixel(fb,self->x+x,self->y+y,color);
+                    put_pixel(fb,self->x+x,self->y+y,color);
                 }
             }
         }
@@ -61,29 +61,26 @@ void draw_button(Widget* self,FrameBuffer* fb){
     int text_height=g_widget_font->char_height;
     int text_x=self->x+self->width/2-text_width/2;
     int text_y=self->y+self->height/2-text_height/2;
-    draw_string(fb,text_x,text_y,data->text,data->text_color,g_widget_font);
+    draw_string(fb, g_widget_font, data->text, text_x, text_y, data->text_color);
 }
 void update_button(Widget* self,FrameBuffer* fb){
-    // Buttons are static, no update needed
+    (void)self; (void)fb;
 }
 void draw_textbox(Widget* self,FrameBuffer* fb){
+    (void)self; (void)fb;
     if(!g_widget_font)return;
-    // Placeholder for textbox drawing
-    // ...
 }
 void update_textbox(Widget* self,FrameBuffer* fb){
-    // Placeholder for textbox update
-    // ...
+    (void)self; (void)fb;
 }
 void draw_scrollbar(Widget* self,FrameBuffer* fb){
-    // Placeholder for scrollbar drawing
-    // ...
+    (void)self; (void)fb;
 }
 void update_scrollbar(Widget* self,FrameBuffer* fb){
-    // Placeholder for scrollbar update
-    // ...
+    (void)self; (void)fb;
 }
 void handle_button_click(Widget* self,int mouse_x,int mouse_y,int button){
+    (void)mouse_x; (void)mouse_y;
     ButtonData* data=(ButtonData*)self->data;
     if(!data)return;
     // Change button color on click
@@ -93,14 +90,16 @@ void handle_button_click(Widget* self,int mouse_x,int mouse_y,int button){
     }
 }
 void handle_button_release(Widget* self,int mouse_x,int mouse_y,int button){
+    (void)mouse_x; (void)mouse_y;
     ButtonData* data=(ButtonData*)self->data;
     if(!data)return;
     if(button==1){ // Left click
         data->bg_color=data->base_color;
-        data->border_color=data->border_color;
+        data->border_color=data->base_color;
     }
 }
 void handle_button_hover(Widget* self,int mouse_x,int mouse_y){
+    (void)mouse_x; (void)mouse_y;
     ButtonData* data=(ButtonData*)self->data;
     if(!data)return;
     // Change button color on hover
@@ -108,12 +107,20 @@ void handle_button_hover(Widget* self,int mouse_x,int mouse_y){
     data->border_color=data->hover_border;
 }
 void handle_button_leave(Widget* self,int mouse_x,int mouse_y){
+    (void)mouse_x; (void)mouse_y;
     ButtonData* data=(ButtonData*)self->data;
     if(!data)return;
     // Revert button color when not hovering
     data->bg_color=data->base_color;
-    data->border_color=data->border_color;
+    data->border_color=data->base_color;
 }
+
+typedef struct {
+    char* placeholder;
+    char* text;
+    uint32_t bg_color;
+    uint32_t text_color;
+} TextboxData;
 void widget_draw(Widget* widget,FrameBuffer* fb){
     if(widget&&widget->draw){
         widget->draw(widget,fb);
@@ -125,8 +132,19 @@ void widget_update(Widget* widget,FrameBuffer* fb){
     }
 }
 void widget_handle_event(Widget* widget,int mouse_x,int mouse_y,int event){
-    if(widget&&widget->handle_event){
-        widget->handle_event(widget,mouse_x,mouse_y,event);
+    if (!widget) return;
+    if (mouse_x >= widget->x && mouse_x < widget->x + widget->width &&
+        mouse_y >= widget->y && mouse_y < widget->y + widget->height) {
+        
+        if (event == EVENT_MOUSE_CLICK && widget->onClick) {
+            widget->onClick(widget, mouse_x, mouse_y, 1); // Assuming left button for now
+        } else if (event == EVENT_MOUSE_RELEASE && widget->onRelease) {
+            widget->onRelease(widget, mouse_x, mouse_y, 1); // Assuming left button for now
+        } else if (event == EVENT_MOUSE_HOVER && widget->onHover) {
+            widget->onHover(widget, mouse_x, mouse_y);
+        } else if (event == EVENT_MOUSE_MOVE && widget->onMove) {
+            widget->onMove(widget, mouse_x, mouse_y);
+        }
     }
 }
 void widget_add(Widget** head,Widget* new_widget){
@@ -201,9 +219,9 @@ Widget* create_label(int x,int y,int width,int height,char* text,uint32_t color)
     widget->data=data;
     widget->draw=draw_label;
     widget->update=update_label;
-    return widget;
+ return widget;
 }
-Widget* create_button(int x,int y,int width,int height,char* text,uint32_t base_color,uint32_t hover_color,uint32_t press_color,uint32 _t border_color,int border_width,uint32_t text_color,uint32_t press_border,uint32_t hover_border){
+Widget* create_button(int x,int y,int width,int height,char* text,uint32_t base_color,uint32_t hover_color,uint32_t press_color,uint32_t border_color,int border_width,uint32_t text_color,uint32_t press_border,uint32_t hover_border){
     ButtonData* data=(ButtonData*)malloc(sizeof(ButtonData));
     if(!data)return NULL;
     data->text=text;
@@ -231,7 +249,7 @@ Widget* create_button(int x,int y,int width,int height,char* text,uint32_t base_
     widget->onRelease=handle_button_release;
     widget->onHover=handle_button_hover;
     widget->onMove=NULL;
-    return widget;
+ return widget;
 }
 Widget* create_textbox(int x,int y,int width,int height,char* placeholder,uint32_t bg_color,uint32_t text_color){
     TextboxData* data=(TextboxData*)malloc(sizeof(TextboxData));
@@ -260,6 +278,13 @@ Widget* create_textbox(int x,int y,int width,int height,char* placeholder,uint32
     widget->update=update_textbox;
     return widget;
 }
+
+typedef struct {
+    uint32_t bg_color;
+    uint32_t thumb_color;
+    int thumb_pos;
+    int thumb_size;
+} ScrollbarData;
 Widget* create_scrollbar(int x,int y,int width,int height,uint32_t bg_color,uint32_t thumb_color){
     ScrollbarData* data=(ScrollbarData*)malloc(sizeof(ScrollbarData));
     if(!data)return NULL;
@@ -283,15 +308,16 @@ Widget* create_scrollbar(int x,int y,int width,int height,uint32_t bg_color,uint
 }
 void init_widget_system(){
     // Initialize default font
-    g_widget_font=load_font("default_font_path"); // Placeholder path
-}
-    if(!g_widget_font){
-        // Fallback to built-in font
-        g_widget_font=get_builtin_font();
-    }
+    // g_widget_font=load_font("default_font_path"); // Placeholder path
+
+    // if(!g_widget_font){
+    // Fallback to built-in font
+    // g_widget_font=get_builtin_font();
+    // }
     if(!g_widget_font){
         // If still no font, log error
-        log_error("Failed to load widget font");
+        vga_print_string("Failed to load widget font\n");
     }
     // Initialize other widget system components if needed
+}
     
