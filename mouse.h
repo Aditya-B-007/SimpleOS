@@ -7,7 +7,7 @@ typedef struct {
     int8_t x_delta;
     int8_t y_delta;
 
-} __attribute__((packed)) mouse_packet_t;
+}mouse_packet_t;
 //Global mouse states
 extern mouse_packet_t mouse_packet;
 extern volatile int32_t mouse_x;

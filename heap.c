@@ -9,7 +9,7 @@ typedef struct heap_segment_header{
     bool free;
     struct heap_segment_header* next;
     struct heap_segment_header* prev;
-} __attribute__((packed)) heap_header_t;
+}heap_header_t;
 
 static void* heap_start_address = NULL;
 static size_t heap_size = 0;
@@ -110,12 +110,10 @@ void heap_free(void* ptr){
     spinlock_release(&heap_lock);
 }
 
-#undef heap_start_address
-#undef heap_size
-#undef first_segment
-#undef heap_init
-#undef heap_alloc
-#undef heap_free
-#undef heap_header_t
-#define kmalloc(size) heap_alloc(size)
-#define kfree(ptr) heap_free(ptr)
+void* kmalloc(size_t size) {
+    return heap_alloc(size);
+}
+
+void kfree(void* ptr) {
+    heap_free(ptr);
+}

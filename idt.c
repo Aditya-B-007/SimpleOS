@@ -1,18 +1,16 @@
 #include "idt.h"
 #include "vga.h"
 #include "syscall.h"
-
-// [FIX] Use aligned definitions if possible, but packed struct is fine.
 static struct idt_entry idt[256];
 static struct idt_ptr ip;
 
 static inline void outb(uint16_t port, uint8_t val) {
-    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+    __asm__ __volatile__("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
-static inline uint8_t inb(uint16_t port) {
+static __inline__ uint8_t inb(uint16_t port) {
     uint8_t ret;
-    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    __asm__ __volatile__("inb %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
 }
 
@@ -26,6 +24,59 @@ static const char *exception_messages[] = {
     "Reserved", "Reserved", "Reserved", "Reserved",
     "Reserved", "Reserved", "Reserved", "Reserved"
 };
+
+// External Assembly ISR handlers
+extern void isr0(void);
+extern void isr1(void);
+extern void isr2(void);
+extern void isr3(void);
+extern void isr4(void);
+extern void isr5(void);
+extern void isr6(void);
+extern void isr7(void);
+extern void isr8(void);
+extern void isr9(void);
+extern void isr10(void);
+extern void isr11(void);
+extern void isr12(void);
+extern void isr13(void);
+extern void isr14(void);
+extern void isr15(void);
+extern void isr16(void);
+extern void isr17(void);
+extern void isr18(void);
+extern void isr19(void);
+extern void isr20(void);
+extern void isr21(void);
+extern void isr22(void);
+extern void isr23(void);
+extern void isr24(void);
+extern void isr25(void);
+extern void isr26(void);
+extern void isr27(void);
+extern void isr28(void);
+extern void isr29(void);
+extern void isr30(void);
+extern void isr31(void);
+extern void isr128(void);
+
+// External Assembly IRQ handlers
+extern void irq0(void);
+extern void irq1(void);
+extern void irq2(void);
+extern void irq3(void);
+extern void irq4(void);
+extern void irq5(void);
+extern void irq6(void);
+extern void irq7(void);
+extern void irq8(void);
+extern void irq9(void);
+extern void irq10(void);
+extern void irq11(void);
+extern void irq12(void);
+extern void irq13(void);
+extern void irq14(void);
+extern void irq15(void);
 
 void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
     idt[num].base_lo = base & 0xFFFF;
@@ -56,8 +107,8 @@ void isr_handler(registers_t *r) {
         }
         
         // Loop forever on exception
-        asm volatile("cli");
-        for(;;) { asm volatile("hlt"); }
+        __asm__ __volatile__("cli");
+        for(;;) { __asm__ __volatile__("hlt"); }
     }
 }
 
@@ -155,16 +206,16 @@ void idt_install(void) {
     // Syscall
     idt_set_gate(128, (uint32_t)isr128, 0x08, 0xEE); // Ring 3 accessible
 
-    asm volatile("lidt %0" : : "m"(ip));
-    asm volatile("sti");
+    __asm__ __volatile__("lidt %0" : : "m"(ip));
+    __asm__ __volatile__("sti");
 }
 
 void page_fault_handler(registers_t *r) {
     (void)r;
     uint32_t faulting_address;
-    asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
+    __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
     vga_print_string("Page Fault at 0x");
     vga_print_hex(faulting_address);
     vga_print_string("\n");
-    for(;;) asm volatile("hlt");
+    for(;;) __asm__ __volatile__("hlt");
 }
