@@ -4,6 +4,7 @@
 #include "timer.h" 
 #include "idt.h"
 #include <string.h> 
+
 static task_t* current_task;
 static task_t* ready_queue;
 static int next_pid = 1;
@@ -23,11 +24,11 @@ void tasking_install(void) {
     vga_print_string("[OK]\n");
 }
 void schedule_from_yield(void){
-    asm volatile("int $0x20");
+    __asm__ __volatile__("int $0x20");
 }
 void create_task(char* name, void (*entry_point)(void)) {
     (void)name; // Name is for debugging, unused for now
-    asm volatile("cli");
+    __asm__ __volatile__("cli");
     task_t* new_task = (task_t*)pmm_alloc_page();
     memset(new_task, 0, sizeof(task_t));
 
@@ -62,7 +63,7 @@ void create_task(char* name, void (*entry_point)(void)) {
         new_task->next = ready_queue->next;
         ready_queue->next = new_task;
     }
-    asm volatile("sti");
+    __asm__ __volatile__("sti");
 }
 
 void schedule(registers_t* r) {

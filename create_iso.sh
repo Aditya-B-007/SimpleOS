@@ -14,7 +14,7 @@ nasm -f win32 interrupt.asm -o interrupt.o
 
 echo "Compiling C sources..."
 # Note: nic.c is used
-C_SOURCES="console.c cursor.c dirty_rect.c font.c gdt.c graphics.c heap.c idt.c kernel.c keyboard.c mouse.c mutex.c paging.c pci.c pmm.c shell.c spinlock.c syscall.c task.c timer.c vga.c widget.c window.c nic.c lib.c"
+C_SOURCES="console.c cursor.c dirty_rect.c font.c gdt.c graphics.c heap.c idt.c kernel.c keyboard.c mouse.c mutex.c paging.c pci.c pmm.c shell.c syscall.c task.c timer.c vga.c widget.c window.c nic.c lib.c"
 
 OBJ_FILES="kernel_entry.o interrupt.o"
 

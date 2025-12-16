@@ -30,7 +30,7 @@ void gdt_install(void) {
 extern void gdt_flush_asm(void);
 
 void gdt_flush(void) {
-    asm volatile (
+    __asm__ __volatile__ (
         "lgdt %0\n\t"
         "mov $0x10, %%ax\n\t"
         "mov %%ax, %%ds\n\t"

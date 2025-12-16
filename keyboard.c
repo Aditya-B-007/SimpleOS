@@ -6,6 +6,8 @@
 #include "window.h"
 #include "io.h"
 
+#define KEYBOARD_DATA_PORT 0x60
+
 unsigned char kbdus[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
@@ -89,7 +91,7 @@ char keyboard_getchar(void) {
 
 void keyboard_wait_for_input(void) {
     while (buffer_start == buffer_end) {
-        asm volatile("hlt");
+        __asm__ __volatile__("hlt");
     }
 }
 

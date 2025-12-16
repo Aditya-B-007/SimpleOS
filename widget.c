@@ -5,7 +5,7 @@
 #include "font.h"
 #include "keyboard.h"
 #include "timer.h"
-#include "memory.h"
+#include "heap.h"
 #include "shell.h"
 #include "pci.h"
 Font* g_widget_font=NULL;
@@ -26,25 +26,7 @@ void draw_button(Widget* self,FrameBuffer* fb){
     ButtonData* data=(ButtonData*)self->data;
     if(!data||!data->text)return;
     // Draw button background
-    for(int y=0;y<self->height;y++){
-        for(int x=0;x<self->width;x++){
-            uint32_t color=data->bg_color;
-            if(x<self->width/2){
-                if(y<self->height/2){
-                    color=data->base_color;
-                }else{
-                    color=data->hover_color;
-                }
-            }else{
-                if(y<self->height/2){
-                    color=data->hover_color;
-                }else{
-                    color=data->base_color;
-                }
-            }
-            put_pixel(fb,self->x+x,self->y+y,color);
-        }
-    }
+    fill_rectangle(fb, self->x, self->y, self->width, self->height, data->bg_color);
     // Draw button border
     for(int i=0;i<data->border_width;i++){
         for(int y=i;y<self->height-i;y++){

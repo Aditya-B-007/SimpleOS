@@ -2,7 +2,7 @@
 #define TASK_H
 #include <stdint.h>
 #include "idt.h" 
-#include "spinlock.h"
+#include "sync.h"
 typedef enum {
     TASK_RUNNING,
     TASK_READY,

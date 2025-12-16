@@ -2,8 +2,8 @@
 #include "paging.h"
 #include "vga.h"
 //Static allocation currently, 4MB=4096-byte aligned
-__attribute__((aligned(4096))) pt_entry_t page_directory[1024];
-__attribute__((aligned(4096))) pt_entry_t fpage_table[1024];
+__attribute__((__aligned__(4096))) pt_entry_t page_directory[1024];
+__attribute__((__aligned__(4096))) pt_entry_t fpage_table[1024];
 
 void paging_install(void) {
     vga_print_string("Installing paging... ");
@@ -35,13 +35,13 @@ void paging_install(void) {
     page_directory[0] = ((uint32_t)fpage_table) | 3;
 
     // Load page directory into CR3
-    asm volatile("mov %0, %%cr3" :: "r"(&page_directory) : "memory");
+    __asm__ __volatile__("mov %0, %%cr3" :: "r"(&page_directory) : "memory");
 
     // Enable paging by setting bit 31 in CR0
     uint32_t cr0;
-    asm volatile("mov %%cr0, %0" : "=r"(cr0));
+    __asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
     cr0 |= 0x80000000; // Set PG bit
-    asm volatile("mov %0, %%cr0" :: "r"(cr0) : "memory");
+    __asm__ __volatile__("mov %0, %%cr0" :: "r"(cr0) : "memory");
 
     vga_print_string("[OK]\n");
 }
