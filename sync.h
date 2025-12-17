@@ -1,0 +1,57 @@
+#ifndef SYNC_H
+#define SYNC_H
+
+#include <stdbool.h>
+
+typedef struct {
+    volatile bool locked;
+} spinlock_t;
+
+/**
+ * @brief Initializes a spinlock to the unlocked state.
+ * @param lock Pointer to the spinlock
+ */
+static __inline__ void spinlock_init(spinlock_t* lock) {
+    lock->locked = 0;
+}
+
+/**
+ * @brief Acquires the spinlock, spinning until it is free.
+ * This uses an atomic test-and-set operation.
+ * @param lock Pointer to the spinlock.
+ */ 
+static __inline__ void spinlock_acquire(spinlock_t* lock) {
+    while (__atomic_test_and_set(&lock->locked, __ATOMIC_ACQUIRE));
+}
+
+/**
+ * @brief Releases the spinlock.
+ * @param lock Pointer to the spinlock.
+ */
+static __inline__ void spinlock_release(spinlock_t* lock) {
+    __atomic_clear(&lock->locked, __ATOMIC_RELEASE);
+}
+
+/**
+ * @brief Acquires the spinlock and disables interrupts.
+ * @param lock Pointer to the spinlock.
+ * @return The flags register before interrupts were disabled.
+ */
+static __inline__ unsigned long spinlock_acquire_irqsave(spinlock_t* lock) {
+    unsigned long flags;
+    __asm__ __volatile__("pushf; pop %0; cli" : "=r"(flags));
+    spinlock_acquire(lock);
+    return flags;
+}
+
+/**
+ * @brief Releases the spinlock and restores interrupts.
+ * @param lock Pointer to the spinlock.
+ * @param flags The flags register to restore.
+ */
+static __inline__ void spinlock_release_irqrestore(spinlock_t* lock, unsigned long flags) {
+    spinlock_release(lock);
+    __asm__ __volatile__("push %0; popf" :: "r"(flags));
+}
+
+#endif // SYNC_H

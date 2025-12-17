@@ -3,16 +3,10 @@
 #include "vga.h"
 #include "shell.h"
 #include <stdint.h>
+#include "window.h"
+#include "io.h"
 
-static inline uint8_t inb(uint16_t port) {
-    uint8_t ret;
-    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
-
-static inline void outb(uint16_t port, uint8_t val) {
-    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
-}
+#define KEYBOARD_DATA_PORT 0x60
 
 unsigned char kbdus[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
@@ -71,8 +65,6 @@ void keyboard_handler(registers_t *r) {
             }
             
             if (ch != 0) {
-                shell_handle_input(ch);
-                
                 int next_end = (buffer_end + 1) % 256;
                 if (next_end != buffer_start) {
                     key_buffer[buffer_end] = ch;
@@ -89,13 +81,17 @@ char keyboard_getchar(void) {
     }
     
     char ch = key_buffer[buffer_start];
+    if (ch !=0){
+        window_handle_key(ch);
+        shell_handle_input(ch);
+    }
     buffer_start = (buffer_start + 1) % 256;
     return ch;
 }
 
 void keyboard_wait_for_input(void) {
     while (buffer_start == buffer_end) {
-        asm volatile("hlt");
+        __asm__ __volatile__("hlt");
     }
 }
 

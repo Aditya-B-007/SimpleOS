@@ -37,7 +37,7 @@ void rtl8139_handler(registers_t *r) {
 void rtl8139_init(void) {
     vga_print_string("Initializing RTL8139... ");
 
-    // --- Find the card (same as before) ---
+    // --- Find the card ---
     uint8_t found = 0;
     for (uint16_t bus = 0; bus < 256; bus++) {
         for (uint8_t device = 0; device < 32; device++) {
@@ -65,9 +65,8 @@ void rtl8139_init(void) {
     // 2. Software Reset
     outb(rtl8139_io_base + REG_COMMAND, 0x10);
     while((inb(rtl8139_io_base + REG_COMMAND) & 0x10) != 0) { /* wait */ }
-
-    // 3. Allocate Receive Buffer (8K + 16 bytes)
-    rx_buffer = (uint8_t*)pmm_alloc(8192 + 16);
+    // 3. Allocate an 16KB block, ie 4 blocks (order 1) for the receive buffer.
+    rx_buffer = (uint8_t*)pmm_alloc_blocks(4);
     outl(rtl8139_io_base + REG_RX_BUF, (uint32_t)rx_buffer);
 
     // 4. Set Interrupt Mask (Enable Receive OK interrupt)

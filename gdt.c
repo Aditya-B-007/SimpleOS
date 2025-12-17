@@ -1,4 +1,5 @@
 #include "gdt.h"
+#include <stdint.h>
 
 #define GDT_ENTRIES 5
 
@@ -20,8 +21,8 @@ void gdt_install(void) {
     gdt_set_gate(0, 0, 0, 0, 0);                    // Null segment
     gdt_set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);    // Kernel code segment (Ring 0)
     gdt_set_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF);    // Kernel data segment (Ring 0)
-    gdt_set_gate(3, 0, 0x7FFFFFFF, 0xFA, 0xCF);    // User code segment (Ring 3, limited)
-    gdt_set_gate(4, 0, 0x7FFFFFFF, 0xF2, 0xCF);    // User data segment (Ring 3, limited)
+    gdt_set_gate(3, 0, 0xFFFFFFFF, 0xFA, 0xCF);    // User code segment (Ring 3, limited)
+    gdt_set_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);    // User data segment (Ring 3, limited)
 
     gdt_flush();
 }
@@ -29,7 +30,7 @@ void gdt_install(void) {
 extern void gdt_flush_asm(void);
 
 void gdt_flush(void) {
-    asm volatile (
+    __asm__ __volatile__ (
         "lgdt %0\n\t"
         "mov $0x10, %%ax\n\t"
         "mov %%ax, %%ds\n\t"
@@ -37,8 +38,8 @@ void gdt_flush(void) {
         "mov %%ax, %%fs\n\t"
         "mov %%ax, %%gs\n\t"
         "mov %%ax, %%ss\n\t"
-        "ljmp $0x08, $flush_cs\n\t"
-        "flush_cs:\n\t"
+        "ljmp $0x08, $1f\n\t"
+        "1:\n\t"
         :
         : "m"(gp)
         : "eax"

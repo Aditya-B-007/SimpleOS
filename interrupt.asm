@@ -1,74 +1,77 @@
 section .text
-global isr0
-global isr1
-global isr2
-global isr3
-global isr4
-global isr5
-global isr6
-global isr7
-global isr8
-global isr9
-global isr10
-global isr11
-global isr12
-global isr13
-global isr14
-global isr15
-global isr16
-global isr17
-global isr18
-global isr19
-global isr20
-global isr21
-global isr22
-global isr23
-global isr24
-global isr25
-global isr26
-global isr27
-global isr28
-global isr29
-global isr30
-global isr31
+global _isr0
+global _isr1
+global _isr2
+global _isr3
+global _isr4
+global _isr5
+global _isr6
+global _isr7
+global _isr8
+global _isr9
+global _isr10
+global _isr11
+global _isr12
+global _isr13
+global _isr14
+global _isr15
+global _isr16
+global _isr17
+global _isr18
+global _isr19
+global _isr20
+global _isr21
+global _isr22
+global _isr23
+global _isr24
+global _isr25
+global _isr26
+global _isr27
+global _isr28
+global _isr29
+global _isr30
+global _isr31
 
-global irq0
-global irq1
-global irq2
-global irq3
-global irq4
-global irq5
-global irq6
-global irq7
-global irq8
-global irq9
-global irq10
-global irq11
-global irq12
-global irq13
-global irq14
-global irq15
-
-extern isr_handler
-extern irq_handler
+global _irq0
+global _irq1
+global _irq2
+global _irq3
+global _irq4
+global _irq5
+global _irq6
+global _irq7
+global _irq8
+global _irq9
+global _irq10
+global _irq11
+global _irq12
+global _irq13
+global _irq14
+global _irq15
+global _isr128
+extern _isr_handler
+extern _irq_handler
 
 %macro isr_no_error 1
-isr%1:
+global _isr%1
+_isr%1:
     cli
     push byte 0
-    push byte %1
+    push dword %1
     jmp isr_common_stub
 %endmacro
 
 %macro isr_error 1
-isr%1:
+global _isr%1
+_isr%1:
     cli
-    push byte %1
+    push dword %1
     jmp isr_common_stub
 %endmacro
 
 %macro irq_stub 2
-irq%1:
+global _irq%1
+_irq%1:
     cli
     push byte 0
     push byte %2
@@ -107,7 +110,7 @@ isr_no_error 28
 isr_no_error 29
 isr_no_error 30
 isr_no_error 31
-
+isr_no_error 128
 irq_stub 0, 32
 irq_stub 1, 33
 irq_stub 2, 34
@@ -136,7 +139,7 @@ isr_common_stub:
     mov fs, ax
     mov gs, ax
 
-    call isr_handler
+    call _isr_handler
 
     pop eax
     mov ds, ax
@@ -160,7 +163,7 @@ irq_common_stub:
     mov fs, ax
     mov gs, ax
 
-    call irq_handler
+    call _irq_handler
 
     pop eax
     mov ds, ax
@@ -170,5 +173,4 @@ irq_common_stub:
 
     popa
     add esp, 8
-    sti
     iret
