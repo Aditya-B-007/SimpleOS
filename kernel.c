@@ -54,10 +54,11 @@ void kernel_main(void) {
     gdt_install();
     idt_install();
     pmm_init(128 * 1024 * 1024);
+    paging_install();
     heap_init(0x00400000, 16 * 1024 * 1024); // 16 MB heap at 4 MB
     memcpy(&vbe_mode_info, (void*)0x8000, sizeof(VbeModeInfo));
 
-    // Initialize Framebuffer and Console EARLY so we can see output
+    // Initialize Framebuffer and Console
     FrameBuffer fb;
     fb.address=(void*)vbe_mode_info.physbase;
     fb.width=vbe_mode_info.resolution_x;
@@ -65,25 +66,26 @@ void kernel_main(void) {
     fb.pitch=vbe_mode_info.pitch;
     fb.bitsPerPixel=vbe_mode_info.bitsPerPixel;
     fb.bytesPerPixel = vbe_mode_info.bitsPerPixel / 8;
+    
     Font my_font;
     my_font.char_width=8;
     my_font.char_height=16;
     my_font.bitmap=font; // Use the font array from font.h
+    
     console_init(&fb, &my_font);
 
     console_write("SimpleOS Kernel v1.0 [SECURED]\n");
     console_write("===============================\n\n");
+    
     syscalls_install();
-    paging_install();
-    __asm__ __volatile__("sti");
-    keyboard_install();
     timer_install();
+    keyboard_install();
+    __asm__ __volatile__("sti");
     rtl8139_init();
     tasking_install();
     mouse_install();
     cursor_init();
-    //create_task("shell",shell_init);
-    //create_task("counter",counter_task);
+
     uint32_t free_mem = pmm_get_free_memory();
     console_write("Free memory: ");
     console_write_dec(free_mem / 1024);
@@ -92,56 +94,70 @@ void kernel_main(void) {
     console_write("\nKernel initialization complete!\n");
     console_write("Starting GUI...\n\n");
 
-    uint32_t xc = fb.width / 2;
-    uint32_t yc = fb.height / 2;
+    // --- GUI INITIALIZATION FIXES ---
 
-    clear_screen(&fb, 0x000000);
-    draw_circle(&fb, xc, yc, 50,  0xFFFFFF);
-    Window* main_window = create_window(100, 100, 400, 300, "Welcome to SimpleOS!", true);
-    if (!main_window) {
-        vga_print_string("Error: Failed to create main window!\n");
-        for(;;) { __asm__ __volatile__("cli; hlt"); }
-    }
-    Widget* label = create_label(20, 40, 200, 30, "Hello, SimpleOS!", 0x000000);
-    if (!label) {
-        vga_print_string("Error: Failed to create label widget!\n");
-        for(;;) { __asm__ __volatile__("cli; hlt"); }
-    }
-    Widget* button = create_button(100, 100, 100, 50, "Click Me", 0xFFFFFF, 0x0000FF, 0x000000, 0x000000, 1, 0x000000, 0x000000, 0x000000);
-    if (!button) {
-        vga_print_string("Error: Failed to create button widget!\n");
-        for(;;) { __asm__ __volatile__("cli; hlt"); }
-    }
-    window_add_widget(main_window, label);
-    window_add_widget(main_window, button);
-    window_draw(main_window, &fb);
-    button->onClick = on_my_button_click;
-    button->onRelease = on_my_button_release;
-    window_list_head = main_window;
-    window_list_tail = main_window;
+    // 1. Initialize Managers & Fonts FIRST
     init_widget_system();
     window_manager_init();
     dirty_rect_init();
-    widget_set_font(&my_font);
-    //Scheduler takes over, chillax!!
+    widget_set_font(&my_font); // Set font BEFORE creating/drawing widgets
+
+    // 2. Clear Screen
+    clear_screen(&fb, 0xECECEC); // Use a nice gray background instead of black
+
+    // 3. Create Window
+    Window* main_window = create_window(100, 100, 400, 300, "Welcome to SimpleOS!", true);
+    if (!main_window) {
+        console_write("Error: Failed to create main window!\n"); // [FIX] Use console_write
+        for(;;) { __asm__ __volatile__("cli; hlt"); }
+    }
+
+    // 4. Create Widgets
+    Widget* label = create_label(20, 40, 200, 30, "Hello, SimpleOS!", 0x000000);
+    if (!label) {
+        console_write("Error: Failed to create label widget!\n"); // [FIX] Use console_write
+        for(;;) { __asm__ __volatile__("cli; hlt"); }
+    }
+
+    Widget* button = create_button(100, 100, 100, 50, "Click Me", 0xFFFFFF, 0x0000FF, 0x000000, 0x000000, 1, 0x000000, 0x000000, 0x000000);
+    if (!button) {
+        console_write("Error: Failed to create button widget!\n"); // [FIX] Use console_write
+        for(;;) { __asm__ __volatile__("cli; hlt"); }
+    }
+
+    // 5. Assemble UI
+    window_add_widget(main_window, label);
+    window_add_widget(main_window, button);
+    
+    button->onClick = on_my_button_click;
+    button->onRelease = on_my_button_release;
+    
+    window_list_head = main_window;
+    window_list_tail = main_window;
+
+    // 6. Initial Draw
+    window_draw(main_window, &fb);
+    dirty_rect_add(0, 0, fb.width, fb.height);
 
     uint8_t last_buttons = 0;
     int32_t last_x = -1, last_y = -1; 
-    dirty_rect_add(0, 0, fb.width, fb.height);
 
+    // Main Loop
     while(1) {
         bool mouse_moved = (mouse_x != last_x || mouse_y != last_y);
         bool buttons_changed = (mouse_buttons != last_buttons);
 
         if (mouse_moved || buttons_changed) {
-            dirty_rect_add(last_x, last_y, 16, 16); 
+            // Redraw only affected areas
+            dirty_rect_add(last_x, last_y, 16, 16); // Old cursor pos
             window_manager_handle_mouse(&window_list_head, &window_list_tail, mouse_x, mouse_y, mouse_buttons, last_buttons);
-            dirty_rect_add(mouse_x, mouse_y, 16, 16);
+            dirty_rect_add(mouse_x, mouse_y, 16, 16); // New cursor pos
 
             last_x = mouse_x;
             last_y = mouse_y;
             last_buttons = mouse_buttons;
         }
+
         int dirty_count;
         const Rect* rects = dirty_rect_get_all(&dirty_count);
 
@@ -150,6 +166,7 @@ void kernel_main(void) {
                 const Rect* dirty = &rects[i];
                 Window* current = window_list_head;
                 while (current) {
+                    // Simple AABB collision check to see if window needs update
                     if (!(current->x > dirty->x + dirty->width || current->x + current->width < dirty->x ||
                           current->y > dirty->y + dirty->height || current->y + current->height < dirty->y)) {
                         window_draw(current, &fb); 
@@ -161,7 +178,6 @@ void kernel_main(void) {
         }
 
         cursor_update(&fb, mouse_x, mouse_y);
-
         __asm__ __volatile__("hlt");
     }
 }

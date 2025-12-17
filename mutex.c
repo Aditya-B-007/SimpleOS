@@ -2,6 +2,7 @@
 #include "idt.h"
 #include "vga.h"
 #include "spinlock.h"
+#include "task.h"
 void mutex_init(mutex_t* mutex){
     spinlock_init(&mutex->lock);//Initializing the guard
     mutex->locked = false;
@@ -27,12 +28,7 @@ void mutex_lock(mutex_t* mutex){
             }
             temp->next = current;
         }
-
-        // Release the spinlock and schedule another task.
-        // This must be atomic.
         schedule_and_release_lock(&mutex->lock, flags);
-
-        // When we wake up, re-acquire the spinlock to re-check the mutex state.
         flags = spinlock_acquire_irqsave(&mutex->lock);
     }
 
@@ -50,10 +46,8 @@ void mutex_unlock(mutex_t* mutex){
     }
     task_t* next_task=mutex->wait_queue;//dequeue the next waiting task
     if (next_task!=NULL){
-        mutex->wait_queue=next_task->next;
-        mutex->locked = true; // The lock remains held, just transferred
-        mutex->owner=next_task;
-        next_task->state=TASK_READY;
+        mutex->wait_queue = next_task->next; // Remove from queue
+        next_task->state = TASK_READY; // Corrected: TASK_READY is defined in task.h
     }
     else{
         mutex->locked=false;
