@@ -3,7 +3,7 @@ LD = ld
 OBJCOPY = objcopy
 NASM = nasm
 
-CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -I. -std=gnu99
+CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -I. -std=gnu99 -MMD
 # Use -f win32 for MinGW, -f elf32 for Linux/Cross-Compiler
 NASMFLAGS = -f win32
 LDFLAGS = -T linker.ld
@@ -36,5 +36,7 @@ interrupt.o: interrupt.asm
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+-include $(OBJ:.o=.d)
+
 clean:
-	rm -f *.o *.bin *.tmp os.img
+	rm -f *.o *.d *.bin *.tmp os.img

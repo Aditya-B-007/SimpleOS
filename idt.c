@@ -1,9 +1,10 @@
 #include "idt.h"
 #include "vga.h"
 #include "syscall.h"
+#include <string.h>
 static struct idt_entry idt[256];
 static struct idt_ptr ip;
-
+static isr_t interrupt_handlers[256];
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ __volatile__("outb %0, %1" : : "a"(val), "Nd"(port));
 }
@@ -113,7 +114,9 @@ void isr_handler(registers_t *r) {
 }
 
 static void (*irq_routines[16])(registers_t *r);
-
+void register_interrupt_handler(uint8_t n, isr_t handler) {
+    interrupt_handlers[n] = handler;
+}
 void irq_install_handler(int irq, void (*handler)(registers_t *r)) {
     if (irq >= 0 && irq < 16) {
         irq_routines[irq] = handler;
@@ -127,6 +130,16 @@ void irq_uninstall_handler(int irq) {
 }
 
 void irq_handler(registers_t *r) {
+    if (interrupt_handlers[r->int_no]) {
+        isr_t handler =interrupt_handlers[r->int_no];
+        handler(r);
+        return;
+    }
+    if (r->int_no==128){
+        syscall_handler(r);
+        return;
+    }
+
     if (r->int_no < 32 || r->int_no > 47) return;
 
     void (*handler)(registers_t *r) = irq_routines[r->int_no - 32];
@@ -142,8 +155,10 @@ void irq_handler(registers_t *r) {
 void idt_install(void) {
     ip.limit = sizeof(struct idt_entry) * 256 - 1;
     ip.base = (uint32_t)&idt;
+    memset(&idt, 0, sizeof(struct idt_entry) * 256);
+    memset(interrupt_handlers, 0, sizeof(isr_t) * 256);
+    memset(irq_routines, 0, sizeof(void *) * 16);
 
-    // Zero out IDT
     for(int i=0; i<256; i++) idt_set_gate(i, 0, 0, 0);
 
     idt_set_gate(0, (uint32_t)isr0, 0x08, 0x8E);
@@ -160,7 +175,7 @@ void idt_install(void) {
     idt_set_gate(11, (uint32_t)isr11, 0x08, 0x8E);
     idt_set_gate(12, (uint32_t)isr12, 0x08, 0x8E);
     idt_set_gate(13, (uint32_t)isr13, 0x08, 0x8E);
-    idt_set_gate(14, (uint32_t)page_fault_handler, 0x08, 0x8E);
+    idt_set_gate(14, (uint32_t)isr14, 0x08, 0x8E);
     idt_set_gate(15, (uint32_t)isr15, 0x08, 0x8E);
     idt_set_gate(16, (uint32_t)isr16, 0x08, 0x8E);
     idt_set_gate(17, (uint32_t)isr17, 0x08, 0x8E);
@@ -184,7 +199,9 @@ void idt_install(void) {
     outb(0x21, 0x20); outb(0xA1, 0x28);
     outb(0x21, 0x04); outb(0xA1, 0x02);
     outb(0x21, 0x01); outb(0xA1, 0x01);
-    outb(0x21, 0x0);  outb(0xA1, 0x0);
+    //outb(0x21, 0x0);  outb(0xA1, 0x0);
+    outb(0x21,0xFF); outb(0xA1,0xFF); // Mask all IRQs initially
+
 
     idt_set_gate(32, (uint32_t)irq0, 0x08, 0x8E);
     idt_set_gate(33, (uint32_t)irq1, 0x08, 0x8E);
@@ -207,15 +224,4 @@ void idt_install(void) {
     idt_set_gate(128, (uint32_t)isr128, 0x08, 0xEE); // Ring 3 accessible
 
     __asm__ __volatile__("lidt %0" : : "m"(ip));
-    __asm__ __volatile__("sti");
-}
-
-void page_fault_handler(registers_t *r) {
-    (void)r;
-    uint32_t faulting_address;
-    __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
-    vga_print_string("Page Fault at 0x");
-    vga_print_hex(faulting_address);
-    vga_print_string("\n");
-    for(;;) __asm__ __volatile__("hlt");
 }
