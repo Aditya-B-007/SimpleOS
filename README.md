@@ -1,4 +1,6 @@
-# SimpleOS - A Lightweight x86 Operating System
+# SimpleOS - A Lightweight x86 Operating System, this is the product that is allowing for the development of the Edge Based Agentic OS, the link for it is given above. Architecture for the edge based agentic OS is as follows:
+<img width="928" height="911" alt="image" src="https://github.com/user-attachments/assets/6397533c-2dc2-4858-8b93-1526de1addc4" />
+
 
 SimpleOS is a lightweight, robust operating system for the x86 architecture, written in C and Assembly. It provides a foundational set of OS features, including protected mode, memory segmentation, and a full interrupt handling system, making it ideal for embedded applications, legacy system revival, or as a base for custom OS development.
 
@@ -189,4 +191,5 @@ This product is released under the MIT License. See the LICENSE file for details
 - [OSDev Wiki](https://wiki.osdev.org/) - Comprehensive OS development resource
 - [Intel 80386 Manual](https://www.intel.com/content/www/us/en/architecture-and-technology/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.html)
 - [Bran's Kernel Development Tutorial](http://www.osdever.net/bkerndev/Docs/title.htm)
+
 - [JamesM's Kernel Development Tutorials](https://web.archive.org/web/20160412174753/http://www.jamesmolloy.co.uk/tutorial_html/index.html)
