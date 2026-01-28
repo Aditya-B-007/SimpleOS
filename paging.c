@@ -1,9 +1,10 @@
 #include "paging.h"
 #include "pmm.h"
-#include "vga.h"
+#include "console.h" // [FIX] Use Console
 #include <string.h>
 #include "idt.h"
-#include "graphics.h"
+
+// Define VBE Struct
 struct VbeInfoBlock {
     uint16_t attributes;
     uint8_t windowA, windowB;
@@ -21,7 +22,7 @@ struct VbeInfoBlock {
     uint8_t blue_mask, blue_position;
     uint8_t rsv_mask, rsv_position;
     uint8_t directcolor_attributes;
-    uint32_t physbase;  // <--- This is what we need!
+    uint32_t physbase;
     uint32_t reserved1;
     uint16_t reserved2;
 } __attribute__((packed));
@@ -34,14 +35,10 @@ void paging_map(uint32_t phys, uint32_t virt, uint32_t flags) {
     uint32_t pt_index = (virt >> 12) & 0x03FF;
 
     if (!page_directory->tables[pd_index]) {
-        // Allocate a new page table
         page_table_t* new_table = (page_table_t*)pmm_alloc_page();
         memset(new_table, 0, sizeof(page_table_t));
-        
-        // Register it in the directory
         page_directory->tables[pd_index] = new_table;
-        // The physical address of the new table is just its pointer (in identity map)
-        page_directory->physical_tables[pd_index] = ((uint32_t)new_table) | 0x7; // Present, RW, User
+        page_directory->physical_tables[pd_index] = ((uint32_t)new_table) | 0x7;
     }
 
     page_table_t* table = page_directory->tables[pd_index];
@@ -53,41 +50,56 @@ void paging_map(uint32_t phys, uint32_t virt, uint32_t flags) {
 
 void switch_page_directory(page_directory_t *dir) {
     uint32_t cr0;
-    // Load CR3 with the address of the physical_tables array
     asm volatile("mov %0, %%cr3" :: "r"(&dir->physical_tables));
     asm volatile("mov %%cr0, %0" : "=r"(cr0));
-    cr0 |= 0x80000000; // Enable paging
+    cr0 |= 0x80000000;
     asm volatile("mov %0, %%cr0" :: "r"(cr0));
 }
+
+// [FIX] Updated Page Fault Handler using Graphics Console
 void page_fault_handler(registers_t *r) {
     (void)r;
     uint32_t faulting_address;
     __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
-    vga_print_string("Page Fault at 0x");
-    vga_print_hex(faulting_address);
-    vga_print_string("\n");
+    
+    // We assume console_init has run. If not, this might still fail, 
+    // but in your kernel.c order, console_init is early enough.
+    console_write("\n[CRITICAL] PAGE FAULT at 0x");
+    console_write_dec(faulting_address);
+    console_write("\nSystem Halted.\n");
+    
     __asm__ __volatile__("cli");
     for(;;) { __asm__ __volatile__("hlt"); }
 }
+
 void paging_install(void) {
     page_directory = (page_directory_t*)pmm_alloc_page();
     memset(page_directory, 0, sizeof(page_directory_t));
+
+    // 1. Map Kernel (0-4MB)
     for (uint32_t i = 0; i < 0x400000; i += PAGE_SIZE) {
         paging_map(i, i, 0x3);
     }
+
+    // 2. Map Heap (4MB-20MB)
     for (uint32_t i = 0x00400000; i < 0x01400000; i += PAGE_SIZE) {
         paging_map(i, i, 0x3);
     }
+
+    // 3. Map Framebuffer
     struct VbeInfoBlock* info = (struct VbeInfoBlock*)0x8000;
     uint32_t fb_phys = info->physbase;
     
-    // Safety check: if 0, something is wrong with bootloader, but we try anyway
     if (fb_phys != 0) {
-        // Map 8MB to be safe (covers 1080p easily)
+        // Map 8MB
         for (uint32_t i = 0; i < 0x00800000; i += PAGE_SIZE) {
             paging_map(fb_phys + i, fb_phys + i, 0x3);
         }
     }
+
+    // Register Handler
     register_interrupt_handler(14, page_fault_handler);
+    
+    // Enable Paging
     switch_page_directory(page_directory);
 }
