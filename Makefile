@@ -1,42 +1,86 @@
-CC = gcc
-LD = ld
-OBJCOPY = objcopy
-NASM = nasm
+# --- Toolchain Configuration ---
+# On Windows with a MinGW-w64 cross-compiler, this is a common prefix.
+# If you were on Linux, it might be 'i686-elf-'.
+TOOLCHAIN_PREFIX = i686-w64-mingw32-
 
-CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -I. -std=gnu99 -MMD
-# Use -f win32 for MinGW, -f elf32 for Linux/Cross-Compiler
+CC      = $(TOOLCHAIN_PREFIX)gcc
+LD      = $(TOOLCHAIN_PREFIX)gcc
+NASM    = nasm
+OBJCOPY = $(TOOLCHAIN_PREFIX)objcopy
+MKISOFS = mkisofs
+DD      = dd
+CAT     = cat
+
+# --- Flags ---
+CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -I. -std=gnu99
+
+# -f win32 is the correct object file format for the MinGW-w64 toolchain.
 NASMFLAGS = -f win32
-LDFLAGS = -T linker.ld
 
-# Auto-detect all .c files in the current folder
-C_SOURCES = $(wildcard *.c)
-# Exclude spinlock.c if it exists (replaced by sync.h implementation)
-C_SOURCES := $(filter-out spinlock.c, $(C_SOURCES))
-# Create a list of .o files to build
-OBJ = $(C_SOURCES:.c=.o)
+# -T linker.ld tells the linker where to place code/data.
+# -nostdlib is crucial for kernel development.
+# -lgcc provides some compiler helper functions that your code might implicitly use.
+LDFLAGS = -T linker.ld -ffreestanding -O2 -nostdlib -lgcc
 
-# Default target
-all: os.img
+# --- Source Files ---
+# Since you have a consolidated project, we list the files explicitly.
+C_SOURCES   = kernel.c
+ASM_SOURCES = kernel_entry.asm interrupt.asm
+BOOT_SOURCE = boot.asm
 
-os.img: boot.bin kernel.bin
-	cat boot.bin kernel.bin > os.img
+# --- Object Files ---
+OBJ_FILES = $(C_SOURCES:.c=.o) $(ASM_SOURCES:.asm=.o)
 
-boot.bin: boot.asm
-	$(NASM) -f bin boot.asm -o boot.bin
+# --- Main Target ---
+all: simpleos.iso
 
-kernel.bin: kernel.tmp
-	$(OBJCOPY) -O binary kernel.tmp kernel.bin
+# --- Build Rules ---
 
-kernel.tmp: $(OBJ) interrupt.o
-	$(LD) $(LDFLAGS) -o kernel.tmp $(OBJ) interrupt.o
+# 1. Create the final ISO from a bootable floppy image.
+simpleos.iso: floppy.img
+	@echo "Creating ISO image..."
+	@mkdir -p iso_root
+	@cp floppy.img iso_root/
+	@$(MKISOFS) -quiet -o simpleos.iso -b floppy.img iso_root/
+	@echo "Build Complete: simpleos.iso is ready for VirtualBox."
 
-interrupt.o: interrupt.asm
-	$(NASM) $(NASMFLAGS) interrupt.asm -o interrupt.o
+# 2. Create a 1.44MB floppy disk image.
+floppy.img: os-image.bin
+	@echo "Creating 1.44MB floppy image..."
+	@$(DD) if=/dev/zero of=floppy.img bs=1024 count=1440 >/dev/null 2>&1
+	@$(DD) if=os-image.bin of=floppy.img conv=notrunc >/dev/null 2>&1
 
-%.o: %.c
+# 3. Concatenate the bootloader and kernel to create a raw bootable image.
+os-image.bin: boot.bin kernel.bin
+	@echo "Concatenating bootloader and kernel..."
+	@$(CAT) boot.bin kernel.bin > os-image.bin
+
+# 4. Create the flat binary kernel from the ELF file.
+kernel.bin: kernel.elf
+	@echo "Extracting kernel binary..."
+	@$(OBJCOPY) -O binary kernel.elf kernel.bin
+
+# 5. Link all kernel object files into an ELF file.
+kernel.elf: $(OBJ_FILES) linker.ld
+	@echo "Linking kernel..."
+	@$(LD) $(LDFLAGS) -o kernel.elf $(OBJ_FILES)
+
+# 6. Assemble the 16-bit bootloader.
+boot.bin: $(BOOT_SOURCE)
+	@echo "Assembling bootloader..."
+	@$(NASM) -f bin $(BOOT_SOURCE) -o boot.bin
+
+# --- Generic Compilation Rules ---
+%.o: %.c kernel.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
--include $(OBJ:.o=.d)
+%.o: %.asm
+	$(NASM) $(NASMFLAGS) $< -o $@
 
+# --- Housekeeping ---
 clean:
-	rm -f *.o *.d *.bin *.tmp os.img
+	@echo "Cleaning up build files..."
+	@rm -rf *.o *.bin *.elf os-image.bin floppy.img simpleos.iso iso_root
+
+.PHONY: all clean
+
